@@ -1,1 +1,54 @@
-# html_admin_class_section
+# School Admin Class Sections
+
+Independent static app for school admins to sign in with Google and manage `classSections`.
+
+## Features
+
+- Google login with Firebase Auth.
+- Create, edit, delete, search, and refresh class sections.
+- CSV export for current filtered sections.
+- CSV import for creating or updating sections.
+- Download a section CSV template before importing.
+- Open any section to create, edit, delete, search, export, and import students in its `students` subcollection.
+- Download a student CSV template before importing.
+- Responsive layout for phones, tablets, and desktop.
+
+## Section CSV Columns
+
+```txt
+id,sectionName,className,title,sortOrder,enabled
+```
+
+Rows with an `id` update that section document using merge. Rows without an `id` create a new section.
+
+## Student CSV Columns
+
+```txt
+id,studentName,phone,enabled
+```
+
+Student imports are scoped to the section currently open in the admin UI. Rows with an `id` update that student document using merge. Rows without an `id` create a new student.
+
+## Admin Access
+
+The app contains an optional `ADMIN_EMAILS` allowlist in `app.js`. Leave it empty for any signed-in Google user during development, or add lowercase admin emails:
+
+```js
+const ADMIN_EMAILS = ['admin@example.com'];
+```
+
+For production security, deploy Firestore rules that authorize admins server-side, such as a `/schoolAdmins/{uid}` marker document.
+
+## Run Locally
+
+From the repository root:
+
+```bash
+python3 -m http.server 8000
+```
+
+Open:
+
+```txt
+http://localhost:8000/school-admin/
+```

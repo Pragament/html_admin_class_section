@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>School Admin - Class Sections</title>
+    <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+    <header class="topbar" id="topbar" hidden>
+        <div>
+            <h1>School Admin</h1>
+            <p id="statusText">Manage class sections</p>
+        </div>
+        <div class="topbar-actions">
+            <button class="btn" id="refreshBtn" type="button">Refresh</button>
+            <button class="btn" id="logoutBtn" type="button">Logout</button>
+        </div>
+    </header>
+
+    <main class="app-shell">
+        <section class="login-panel" id="loginView">
+            <div>
+                <h1>Class Section Admin</h1>
+                <p>Sign in with your school Google account to manage sections.</p>
+            </div>
+            <button class="btn primary wide-btn" id="loginBtn" type="button">Google Login</button>
+        </section>
+
+        <section class="dashboard" id="dashboardView" hidden>
+            <section class="panel action-panel">
+                <div>
+                    <h2>Class Sections</h2>
+                    <p id="adminLabel"></p>
+                </div>
+                <div class="action-bar">
+                    <button class="btn primary" id="newSectionBtn" type="button">New Section</button>
+                    <button class="btn" id="exportCsvBtn" type="button">Export CSV</button>
+                    <button class="btn" id="sectionTemplateBtn" type="button">CSV Template</button>
+                    <label class="btn file-btn">
+                        Import CSV
+                        <input id="csvInput" type="file" accept=".csv,text/csv" />
+                    </label>
+                </div>
+            </section>
+
+            <section class="panel">
+                <div class="toolbar">
+                    <label class="field search-field">
+                        <span>Search</span>
+                        <input id="searchInput" type="search" placeholder="Section, class, id" />
+                    </label>
+                    <span class="count-chip" id="sectionCount">0</span>
+                </div>
+                <div id="sectionTableWrap" class="table-wrap"></div>
+            </section>
+
+            <section class="panel student-panel" id="studentPanel" hidden>
+                <div class="student-panel-head">
+                    <div>
+                        <h2 id="studentPanelTitle">Students</h2>
+                        <p id="studentPanelSubtitle"></p>
+                    </div>
+                    <div class="action-bar">
+                        <button class="btn primary" id="newStudentBtn" type="button">New Student</button>
+                        <button class="btn" id="exportStudentsCsvBtn" type="button">Export Students</button>
+                        <button class="btn" id="studentTemplateBtn" type="button">Student Template</button>
+                        <label class="btn file-btn">
+                            Import Students
+                            <input id="studentCsvInput" type="file" accept=".csv,text/csv" />
+                        </label>
+                        <button class="btn" id="closeStudentPanelBtn" type="button">Close</button>
+                    </div>
+                </div>
+                <div class="toolbar">
+                    <label class="field search-field">
+                        <span>Search Students</span>
+                        <input id="studentSearchInput" type="search" placeholder="Name, phone, id" />
+                    </label>
+                    <span class="count-chip" id="studentCount">0</span>
+                </div>
+                <div id="studentTableWrap" class="table-wrap"></div>
+            </section>
+        </section>
+    </main>
+
+    <dialog id="sectionDialog" class="modal">
+        <form id="sectionForm" class="modal-card">
+            <input id="sectionId" type="hidden" />
+            <div class="modal-head">
+                <div>
+                    <h2 id="sectionDialogTitle">New Section</h2>
+                    <p>Section names are used by the teacher dashboard and quiz flow.</p>
+                </div>
+                <button class="btn" id="cancelSectionBtn" type="button">Cancel</button>
+            </div>
+            <div class="form-grid">
+                <label class="field">
+                    <span>Section Name</span>
+                    <input id="sectionName" required autocomplete="off" placeholder="DSS grade 8" />
+                </label>
+                <label class="field">
+                    <span>Class Name</span>
+                    <input id="className" autocomplete="off" placeholder="Grade 8" />
+                </label>
+                <label class="field">
+                    <span>Title</span>
+                    <input id="title" autocomplete="off" placeholder="Optional display title" />
+                </label>
+                <label class="field">
+                    <span>Sort Order</span>
+                    <input id="sortOrder" type="number" step="1" placeholder="0" />
+                </label>
+            </div>
+            <label class="toggle-field">
+                <input id="sectionEnabled" type="checkbox" checked />
+                <span>Enabled</span>
+            </label>
+            <div class="form-actions">
+                <button class="btn primary" id="saveSectionBtn" type="submit">Save Section</button>
+            </div>
+        </form>
+    </dialog>
+
+    <dialog id="studentDialog" class="modal">
+        <form id="studentForm" class="modal-card">
+            <input id="studentId" type="hidden" />
+            <div class="modal-head">
+                <div>
+                    <h2 id="studentDialogTitle">New Student</h2>
+                    <p id="studentDialogSubtitle"></p>
+                </div>
+                <button class="btn" id="cancelStudentBtn" type="button">Cancel</button>
+            </div>
+            <div class="form-grid">
+                <label class="field">
+                    <span>Student Name</span>
+                    <input id="studentName" required autocomplete="off" placeholder="Student full name" />
+                </label>
+                <label class="field">
+                    <span>Phone</span>
+                    <input id="studentPhone" autocomplete="off" placeholder="+91..." />
+                </label>
+            </div>
+            <label class="toggle-field">
+                <input id="studentEnabled" type="checkbox" checked />
+                <span>Enabled</span>
+            </label>
+            <div class="form-actions">
+                <button class="btn primary" id="saveStudentBtn" type="submit">Save Student</button>
+            </div>
+        </form>
+    </dialog>
+
+    <dialog id="confirmDialog" class="modal confirm-modal">
+        <form id="confirmForm" class="modal-card">
+            <div>
+                <h2 id="confirmTitle">Delete Section?</h2>
+                <p id="confirmText"></p>
+            </div>
+            <div class="form-actions">
+                <button class="btn" id="cancelDeleteBtn" type="button">Cancel</button>
+                <button class="btn danger" type="submit">Delete</button>
+            </div>
+        </form>
+    </dialog>
+
+    <div id="toast" class="toast"></div>
+    <script type="module" src="app.js"></script>
+</body>
+</html>
