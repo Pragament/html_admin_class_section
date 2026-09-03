@@ -34,7 +34,8 @@ const COLLECTIONS = {
 };
 
 const ADMIN_EMAILS = [];
-const CSV_COLUMNS = ['id', 'sectionName', 'className', 'title', 'sortOrder', 'enabled'];
+const MEMBER_ROLES = ['viewer', 'admin'];
+const CSV_COLUMNS = ['id', 'sectionName', 'className', 'title', 'sortOrder', 'enabled', 'members'];
 const STUDENT_CSV_COLUMNS = ['id', 'studentName', 'phone', 'enabled'];
 
 const app = initializeApp(firebaseConfig);
@@ -86,6 +87,8 @@ const els = {
     title: $('title'),
     sortOrder: $('sortOrder'),
     sectionEnabled: $('sectionEnabled'),
+    memberList: $('memberList'),
+    addMemberBtn: $('addMemberBtn'),
     saveSectionBtn: $('saveSectionBtn'),
     cancelSectionBtn: $('cancelSectionBtn'),
     studentDialog: $('studentDialog'),
@@ -145,6 +148,8 @@ function bindEvents() {
     els.newSectionBtn.addEventListener('click', openCreateDialog);
     els.cancelSectionBtn.addEventListener('click', () => els.sectionDialog.close());
     els.sectionForm.addEventListener('submit', saveSection);
+    els.addMemberBtn.addEventListener('click', () => addMemberRow());
+    els.memberList.addEventListener('click', handleMemberListClick);
     els.searchInput.addEventListener('input', renderSections);
     els.exportCsvBtn.addEventListener('click', exportSectionsCsv);
     els.sectionTemplateBtn.addEventListener('click', downloadSectionTemplate);
@@ -202,6 +207,7 @@ function renderSections() {
                     <th scope="col">Title</th>
                     <th scope="col">Sort</th>
                     <th scope="col">Status</th>
+                    <th scope="col">Access</th>
                     <th scope="col">ID</th>
                     <th scope="col">Actions</th>
                 </tr>
@@ -214,6 +220,7 @@ function renderSections() {
                         <td>${esc(section.title || '')}</td>
                         <td>${esc(section.sortOrder ?? '')}</td>
                         <td><span class="status-chip ${section.enabled === false ? 'disabled' : 'enabled'}">${section.enabled === false ? 'Disabled' : 'Enabled'}</span></td>
+                        <td>${renderMemberChips(section.members)}</td>
                         <td><code>${esc(section.id)}</code></td>
                         <td>
                             <div class="row-actions">
@@ -243,7 +250,7 @@ function filteredSections() {
     const search = els.searchInput.value.trim().toLowerCase();
     if (!search) return sections;
     return sections.filter(section => {
-        return [section.id, section.sectionName, section.name, section.className, section.title]
+        return [section.id, section.sectionName, section.name, section.className, section.title, serializeMembers(section.members)]
             .some(value => String(value || '').toLowerCase().includes(search));
     });
 }
@@ -254,6 +261,7 @@ function openCreateDialog() {
     els.sectionForm.reset();
     els.sectionId.value = '';
     els.sectionEnabled.checked = true;
+    renderMemberRows([]);
     els.sectionDialog.showModal();
 }
 
@@ -268,6 +276,7 @@ function openEditDialog(id) {
     els.title.value = section.title || '';
     els.sortOrder.value = section.sortOrder ?? '';
     els.sectionEnabled.checked = section.enabled !== false;
+    renderMemberRows(normalizeMembers(section.members));
     els.sectionDialog.showModal();
 }
 
@@ -316,7 +325,8 @@ function sectionFormData() {
         className: els.className.value.trim(),
         title: els.title.value.trim(),
         sortOrder: sortOrderText === '' ? null : Number(sortOrderText),
-        enabled: els.sectionEnabled.checked
+        enabled: els.sectionEnabled.checked,
+        members: memberFormData()
     };
 }
 
@@ -364,7 +374,8 @@ function exportSectionsCsv() {
             section.className || '',
             section.title || '',
             section.sortOrder ?? '',
-            section.enabled === false ? 'false' : 'true'
+            section.enabled === false ? 'false' : 'true',
+            serializeMembers(section.members)
         ]);
     });
     downloadBlob(new Blob([toCsv(rows)], { type: 'text/csv;charset=utf-8' }), 'class-sections.csv');
@@ -373,7 +384,7 @@ function exportSectionsCsv() {
 function downloadSectionTemplate() {
     downloadBlob(new Blob([toCsv([
         CSV_COLUMNS,
-        ['', 'DSS grade 8', 'Grade 8', 'Display title', '0', 'true']
+        ['', 'DSS grade 8', 'Grade 8', 'Display title', '0', 'true', 'teacher@example.com:admin;viewer@example.com:viewer']
     ])], { type: 'text/csv;charset=utf-8' }), 'class-sections-template.csv');
 }
 
@@ -423,7 +434,7 @@ async function importSectionsCsv(event) {
 function sectionCsvData(record) {
     const sectionName = String(record.sectionname || record.name || '').trim();
     const sortOrderText = String(record.sortorder || '').trim();
-    return {
+    const data = {
         sectionName,
         name: sectionName,
         className: String(record.classname || '').trim(),
@@ -431,6 +442,104 @@ function sectionCsvData(record) {
         sortOrder: sortOrderText === '' ? null : Number(sortOrderText),
         enabled: parseBoolean(record.enabled, true)
     };
+    if ('members' in record || 'access' in record || 'roles' in record) {
+        data.members = parseMembers(record.members || record.access || record.roles || '');
+    }
+    return data;
+}
+
+function renderMemberRows(members) {
+    els.memberList.innerHTML = '';
+    const rows = members.length ? members : [{ email: '', role: 'viewer' }];
+    rows.forEach(member => addMemberRow(member));
+}
+
+function addMemberRow(member = { email: '', role: 'viewer' }) {
+    const row = document.createElement('div');
+    row.className = 'role-row';
+    row.innerHTML = `
+        <label class="field role-email-field">
+            <span>Email</span>
+            <input data-member-email type="email" autocomplete="off" placeholder="teacher@example.com" value="${esc(member.email || '')}" />
+        </label>
+        <label class="field role-select-field">
+            <span>Role</span>
+            <select data-member-role>
+                ${MEMBER_ROLES.map(role => `
+                    <option value="${role}" ${member.role === role ? 'selected' : ''}>${role}</option>
+                `).join('')}
+            </select>
+        </label>
+        <button class="btn small danger role-remove-btn" data-remove-member type="button">Remove</button>
+    `;
+    els.memberList.append(row);
+}
+
+function handleMemberListClick(event) {
+    const button = event.target.closest('[data-remove-member]');
+    if (!button) return;
+    button.closest('.role-row')?.remove();
+    if (!els.memberList.querySelector('.role-row')) addMemberRow();
+}
+
+function memberFormData() {
+    const seen = new Set();
+    return Array.from(els.memberList.querySelectorAll('.role-row'))
+        .map(row => {
+            const email = row.querySelector('[data-member-email]')?.value.trim().toLowerCase() || '';
+            const role = normalizeRole(row.querySelector('[data-member-role]')?.value);
+            return { email, role };
+        })
+        .filter(member => {
+            if (!member.email || seen.has(member.email)) return false;
+            seen.add(member.email);
+            return true;
+        });
+}
+
+function normalizeMembers(value) {
+    if (!Array.isArray(value)) return [];
+    const seen = new Set();
+    return value.map(member => ({
+        email: String(member?.email || '').trim().toLowerCase(),
+        role: normalizeRole(member?.role)
+    })).filter(member => {
+        if (!member.email || seen.has(member.email)) return false;
+        seen.add(member.email);
+        return true;
+    });
+}
+
+function parseMembers(value) {
+    if (Array.isArray(value)) return normalizeMembers(value);
+    return normalizeMembers(String(value || '').split(/[;\n]/)
+        .map(item => {
+            const [email, role] = item.split(':');
+            return {
+                email: String(email || '').trim().toLowerCase(),
+                role: normalizeRole(role)
+            };
+        })
+        .filter(member => member.email));
+}
+
+function serializeMembers(value) {
+    return normalizeMembers(value)
+        .map(member => `${member.email}:${member.role}`)
+        .join(';');
+}
+
+function renderMemberChips(value) {
+    const members = normalizeMembers(value);
+    if (!members.length) return '<span class="muted-text">None</span>';
+    return `<div class="member-chip-list">${members.map(member => `
+        <span class="role-chip ${member.role === 'admin' ? 'admin' : 'viewer'}">${esc(member.email)}: ${esc(member.role)}</span>
+    `).join('')}</div>`;
+}
+
+function normalizeRole(value) {
+    const role = String(value || '').trim().toLowerCase();
+    return MEMBER_ROLES.includes(role) ? role : 'viewer';
 }
 
 async function openStudentPanel(sectionId) {

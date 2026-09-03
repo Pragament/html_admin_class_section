@@ -1,6 +1,6 @@
 # Firestore Schema
 
-The teacher dashboard reads classroom and quiz submission data. It can create and update classrooms owned by the signed-in teacher.
+The teacher dashboard reads classroom and quiz submission data. It can create and update classrooms owned by the signed-in teacher. The separate admin pages manage class sections, section rosters, section access roles, and can list classrooms across all users.
 
 ## Firebase Auth
 
@@ -8,6 +8,12 @@ Teachers sign in with Google. The app uses the signed-in Firebase Auth UID to fi
 
 ```txt
 classrooms where creatorId == currentUser.uid
+```
+
+The classroom admin list reads all classroom documents:
+
+```txt
+classrooms
 ```
 
 ## Collections
@@ -40,7 +46,7 @@ Document shape:
 
 Important fields:
 
-- `creatorId` - must match the signed-in teacher UID for the classroom to appear.
+- `creatorId` - must match the signed-in teacher UID for the teacher dashboard. The admin classroom list shows classrooms from all creators and displays this value.
 - `classCode` - shown in classroom cards and used as a submission lookup fallback.
 - `classEnabled` - shown as enabled/disabled.
 - `sectionId` - used as a submission lookup fallback for all students in the classroom section.
@@ -68,9 +74,33 @@ Supported display fields:
   sectionName: 'DSS grade 8',
   name: 'DSS grade 8',
   className: 'DSS grade 8',
-  title: 'DSS grade 8'
+  title: 'DSS grade 8',
+  sortOrder: 0,
+  enabled: true,
+  members: [
+    {
+      email: 'teacher@example.com',
+      role: 'admin'
+    },
+    {
+      email: 'viewer@example.com',
+      role: 'viewer'
+    }
+  ],
+  createdBy: 'admin@example.com',
+  updatedBy: 'admin@example.com',
+  createdAt: Timestamp,
+  updatedAt: Timestamp,
+  createdDate: 1788177950135
 }
 ```
+
+Section admin access:
+
+- `members` - array of email/role assignments for the section.
+- `members[].email` - normalized lowercase email.
+- `members[].role` - either `viewer` or `admin`.
+- Section CSV import/export represents members as semicolon-separated `email:role` pairs, for example `teacher@example.com:admin;viewer@example.com:viewer`.
 
 The selected option is saved into classrooms as:
 
@@ -91,10 +121,22 @@ Student document shape:
 
 ```js
 {
-  admissionNo: '102',
+  studentName: 'Parunandi Sai Adithya',
   name: 'Parunandi Sai Adithya',
-  phone: '8328303045'
+  phone: '8328303045',
+  enabled: true,
+  createdBy: 'admin@example.com',
+  updatedBy: 'admin@example.com',
+  createdAt: Timestamp,
+  updatedAt: Timestamp,
+  createdDate: 1788177950135
 }
+```
+
+Student CSV import/export columns:
+
+```txt
+id,studentName,phone,enabled
 ```
 
 ### `qb_lists_v1`
@@ -188,6 +230,12 @@ Classroom list:
 
 ```txt
 classrooms where creatorId == currentUser.uid
+```
+
+Classroom admin list:
+
+```txt
+classrooms
 ```
 
 Question list dropdown:

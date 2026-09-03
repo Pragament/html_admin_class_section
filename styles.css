@@ -32,7 +32,8 @@ body {
 }
 
 button,
-input {
+input,
+select {
     font: inherit;
 }
 
@@ -215,6 +216,16 @@ a.btn,
     padding: 8px 10px;
 }
 
+.field select {
+    width: 100%;
+    min-height: 38px;
+    border: 1px solid var(--line);
+    border-radius: 7px;
+    background: #fff;
+    color: var(--text);
+    padding: 8px 10px;
+}
+
 .search-field {
     width: min(380px, 100%);
 }
@@ -284,6 +295,89 @@ a.btn,
 .section-table code {
     color: var(--muted);
     font-size: 12px;
+}
+
+.muted-text {
+    color: var(--muted);
+    font-size: 12px;
+    font-weight: 700;
+}
+
+.role-editor {
+    display: grid;
+    gap: 10px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: var(--panel-soft);
+    padding: 12px;
+}
+
+.role-editor h3 {
+    margin: 0;
+    font-size: 15px;
+}
+
+.role-editor-head,
+.role-row,
+.member-chip-list {
+    display: flex;
+    gap: 8px;
+}
+
+.role-editor-head {
+    align-items: flex-start;
+    justify-content: space-between;
+}
+
+.role-list {
+    display: grid;
+    gap: 8px;
+}
+
+.role-row {
+    align-items: end;
+}
+
+.role-email-field {
+    flex: 1 1 260px;
+}
+
+.role-select-field {
+    flex: 0 0 140px;
+}
+
+.role-remove-btn {
+    flex: 0 0 auto;
+}
+
+.member-chip-list {
+    flex-wrap: wrap;
+}
+
+.role-chip {
+    display: inline-flex;
+    align-items: center;
+    min-height: 24px;
+    max-width: 260px;
+    overflow: hidden;
+    border-radius: 999px;
+    background: #edf4fa;
+    color: #40566d;
+    padding: 0 9px;
+    font-size: 12px;
+    font-weight: 800;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.role-chip.admin {
+    color: #7a3f0d;
+    background: #fff3df;
+}
+
+.role-chip.viewer {
+    color: #315c86;
+    background: #e8f3ff;
 }
 
 .empty-card {
@@ -379,6 +473,8 @@ a.btn,
 
 @media (max-width: 820px) {
     .action-panel,
+    .role-editor-head,
+    .role-row,
     .student-panel-head,
     .toolbar {
         align-items: stretch;
@@ -388,6 +484,8 @@ a.btn,
     .action-bar,
     .action-bar .btn,
     .file-btn,
+    .role-select-field,
+    .role-remove-btn,
     .search-field {
         width: 100%;
     }

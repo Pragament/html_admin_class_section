@@ -114,6 +114,16 @@
                     <input id="sortOrder" type="number" step="1" placeholder="0" />
                 </label>
             </div>
+            <section class="role-editor">
+                <div class="role-editor-head">
+                    <div>
+                        <h3>Section Access</h3>
+                        <p>Add emails that can view or administer this section.</p>
+                    </div>
+                    <button class="btn small" id="addMemberBtn" type="button">Add Email</button>
+                </div>
+                <div class="role-list" id="memberList"></div>
+            </section>
             <label class="toggle-field">
                 <input id="sectionEnabled" type="checkbox" checked />
                 <span>Enabled</span>

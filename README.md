@@ -17,10 +17,11 @@ Independent static app for school admins to sign in with Google and manage `clas
 ## Section CSV Columns
 
 ```txt
-id,sectionName,className,title,sortOrder,enabled
+id,sectionName,className,title,sortOrder,enabled,members
 ```
 
 Rows with an `id` update that section document using merge. Rows without an `id` create a new section.
+Use `email:role` pairs separated by semicolons in `members`, such as `teacher@example.com:admin;parent@example.com:viewer`.
 
 ## Student CSV Columns
 
