@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>School Admin - Classrooms</title>
+    <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+    <header class="topbar" id="topbar" hidden>
+        <div>
+            <h1>School Admin</h1>
+            <p id="statusText">List all classrooms</p>
+        </div>
+        <div class="topbar-actions">
+            <a class="btn" href="index.html">Home</a>
+            <button class="btn" id="refreshBtn" type="button">Refresh</button>
+            <button class="btn" id="logoutBtn" type="button">Logout</button>
+        </div>
+    </header>
+
+    <main class="app-shell">
+        <section class="login-panel" id="loginView">
+            <div>
+                <h1>Classrooms</h1>
+                <p>Sign in with your school Google account to view classrooms.</p>
+            </div>
+            <button class="btn primary wide-btn" id="loginBtn" type="button">Google Login</button>
+            <a class="btn wide-btn" href="index.html">Back Home</a>
+        </section>
+
+        <section class="dashboard" id="dashboardView" hidden>
+            <section class="panel action-panel">
+                <div>
+                    <h2>My Classrooms</h2>
+                    <p id="adminLabel"></p>
+                </div>
+                <div class="action-bar">
+                    <a class="btn" href="index.html">Manage Sections</a>
+                    <button class="btn" id="exportClassroomsBtn" type="button">Export CSV</button>
+                </div>
+            </section>
+
+            <section class="panel">
+                <div class="toolbar">
+                    <label class="field search-field">
+                        <span>Search</span>
+                        <input id="searchInput" type="search" placeholder="Code, classroom, section, id" />
+                    </label>
+                    <span class="count-chip" id="classroomCount">0</span>
+                </div>
+                <div id="classroomTableWrap" class="table-wrap"></div>
+            </section>
+        </section>
+    </main>
+
+    <div id="toast" class="toast"></div>
+    <script type="module" src="classrooms.js"></script>
+</body>
+</html>

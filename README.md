@@ -5,6 +5,7 @@ Independent static app for school admins to sign in with Google and manage `clas
 ## Features
 
 - Google login with Firebase Auth.
+- Dedicated `/classrooms` list page for all users, with search, refresh, and CSV export.
 - Create, edit, delete, search, and refresh class sections.
 - CSV export for current filtered sections.
 - CSV import for creating or updating sections.
@@ -28,6 +29,14 @@ id,studentName,phone,enabled
 ```
 
 Student imports are scoped to the section currently open in the admin UI. Rows with an `id` update that student document using merge. Rows without an `id` create a new student.
+
+## Classroom CSV Columns
+
+```txt
+id,classCode,className,sectionId,sectionName,questionBankListId,classEnabled,creatorId,createdDate
+```
+
+The classroom page reads all documents from `/classrooms` and includes `creatorId` in the table and export.
 
 ## Admin Access
 

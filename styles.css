@@ -37,6 +37,7 @@ input {
 }
 
 button,
+a.btn,
 .file-btn {
     cursor: pointer;
 }
@@ -95,6 +96,9 @@ button,
 }
 
 .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     min-height: 36px;
     border: 1px solid var(--line);
     border-radius: 7px;
@@ -103,6 +107,7 @@ button,
     padding: 0 13px;
     font-size: 13px;
     font-weight: 800;
+    text-decoration: none;
 }
 
 .btn:hover {
