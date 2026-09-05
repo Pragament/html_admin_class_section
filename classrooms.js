@@ -8,8 +8,12 @@ import {
 } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
 import {
     collection,
+    deleteDoc,
+    doc,
     getDocs,
-    getFirestore
+    getFirestore,
+    query,
+    where
 } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
 
 const firebaseConfig = {
@@ -23,7 +27,8 @@ const firebaseConfig = {
 };
 
 const COLLECTIONS = {
-    classrooms: 'classrooms'
+    classrooms: 'classrooms',
+    submissions: 'qb_quiz_submissions_v1'
 };
 
 const ADMIN_EMAILS = [];
@@ -45,6 +50,7 @@ const db = getFirestore(app);
 
 let currentUser = null;
 let classrooms = [];
+let selectedClassroomIds = new Set();
 let toastTimer = null;
 
 const $ = (id) => document.getElementById(id);
@@ -58,9 +64,16 @@ const els = {
     refreshBtn: $('refreshBtn'),
     adminLabel: $('adminLabel'),
     exportClassroomsBtn: $('exportClassroomsBtn'),
+    deleteSelectedBtn: $('deleteSelectedBtn'),
     searchInput: $('searchInput'),
     classroomCount: $('classroomCount'),
+    selectedCount: $('selectedCount'),
     classroomTableWrap: $('classroomTableWrap'),
+    confirmDialog: $('confirmDialog'),
+    confirmForm: $('confirmForm'),
+    confirmText: $('confirmText'),
+    cancelDeleteBtn: $('cancelDeleteBtn'),
+    confirmDeleteBtn: $('confirmDeleteBtn'),
     toast: $('toast')
 };
 
@@ -75,6 +88,7 @@ onAuthStateChanged(auth, async (user) => {
 
     if (!user) {
         classrooms = [];
+        selectedClassroomIds = new Set();
         setStatus('Sign in with Google');
         renderClassrooms();
         return;
@@ -82,6 +96,7 @@ onAuthStateChanged(auth, async (user) => {
 
     if (!allowed) {
         classrooms = [];
+        selectedClassroomIds = new Set();
         await signOut(auth);
         toast('This Google account is not allowed for admin access');
         renderClassrooms();
@@ -97,7 +112,11 @@ function bindEvents() {
     els.logoutBtn.addEventListener('click', () => signOut(auth));
     els.refreshBtn.addEventListener('click', loadClassrooms);
     els.exportClassroomsBtn.addEventListener('click', exportClassroomsCsv);
+    els.deleteSelectedBtn.addEventListener('click', openDeleteDialog);
     els.searchInput.addEventListener('input', renderClassrooms);
+    els.classroomTableWrap.addEventListener('change', handleTableSelection);
+    els.cancelDeleteBtn.addEventListener('click', () => els.confirmDialog.close());
+    els.confirmForm.addEventListener('submit', deleteSelectedClassrooms);
 }
 
 async function login() {
@@ -116,6 +135,7 @@ async function loadClassrooms() {
     try {
         const snap = await getDocs(collection(db, COLLECTIONS.classrooms));
         classrooms = snap.docs.map(d => ({ id: d.id, ...d.data() })).sort(compareClassrooms);
+        selectedClassroomIds = new Set([...selectedClassroomIds].filter(id => classrooms.some(classroom => classroom.id === id)));
         renderClassrooms();
         setStatus(`${classrooms.length} classroom${classrooms.length === 1 ? '' : 's'} loaded`);
     } catch (error) {
@@ -129,10 +149,12 @@ async function loadClassrooms() {
 function renderClassrooms() {
     const visible = filteredClassrooms();
     els.classroomCount.textContent = String(visible.length);
+    updateSelectionState();
     els.classroomTableWrap.innerHTML = visible.length ? `
         <table class="section-table">
             <thead>
                 <tr>
+                    <th scope="col"><input type="checkbox" data-select-all ${visible.every(classroom => selectedClassroomIds.has(classroom.id)) ? 'checked' : ''} /></th>
                     <th scope="col">Code</th>
                     <th scope="col">Classroom</th>
                     <th scope="col">Section</th>
@@ -145,6 +167,7 @@ function renderClassrooms() {
             <tbody>
                 ${visible.map(classroom => `
                     <tr>
+                        <td><input type="checkbox" data-select-classroom="${esc(classroom.id)}" ${selectedClassroomIds.has(classroom.id) ? 'checked' : ''} /></td>
                         <td><strong>${esc(classroom.classCode || '')}</strong></td>
                         <td><strong>${esc(classroomLabel(classroom))}</strong></td>
                         <td>${esc(classroom.sectionName || '')}</td>
@@ -157,6 +180,97 @@ function renderClassrooms() {
             </tbody>
         </table>
     ` : '<div class="empty-card">No classrooms found.</div>';
+    updateSelectionState();
+}
+
+function handleTableSelection(event) {
+    const selectAll = event.target.closest('[data-select-all]');
+    if (selectAll) {
+        filteredClassrooms().forEach(classroom => {
+            if (selectAll.checked) {
+                selectedClassroomIds.add(classroom.id);
+            } else {
+                selectedClassroomIds.delete(classroom.id);
+            }
+        });
+        renderClassrooms();
+        return;
+    }
+
+    const checkbox = event.target.closest('[data-select-classroom]');
+    if (!checkbox) return;
+    if (checkbox.checked) {
+        selectedClassroomIds.add(checkbox.dataset.selectClassroom);
+    } else {
+        selectedClassroomIds.delete(checkbox.dataset.selectClassroom);
+    }
+    updateSelectionState();
+}
+
+function updateSelectionState() {
+    const selectedCount = selectedClassroomIds.size;
+    els.selectedCount.textContent = `${selectedCount} selected`;
+    els.deleteSelectedBtn.disabled = selectedCount === 0;
+}
+
+function openDeleteDialog() {
+    const selected = selectedClassrooms();
+    if (!selected.length) return;
+    els.confirmText.textContent = `This will delete ${selected.length} classroom${selected.length === 1 ? '' : 's'} and all matching submissions found by classroom document ID, class code, or section ID.`;
+    els.confirmDialog.showModal();
+}
+
+async function deleteSelectedClassrooms(event) {
+    event.preventDefault();
+    const selected = selectedClassrooms();
+    if (!selected.length) return;
+    els.confirmDeleteBtn.disabled = true;
+    setStatus('Deleting classrooms and submissions...');
+    try {
+        const submissionIds = await findSubmissionIdsForClassrooms(selected);
+        for (const submissionId of submissionIds) {
+            await deleteDoc(doc(db, COLLECTIONS.submissions, submissionId));
+        }
+        for (const classroom of selected) {
+            await deleteDoc(doc(db, COLLECTIONS.classrooms, classroom.id));
+        }
+        classrooms = classrooms.filter(classroom => !selectedClassroomIds.has(classroom.id));
+        const classroomCount = selected.length;
+        selectedClassroomIds = new Set();
+        els.confirmDialog.close();
+        renderClassrooms();
+        setStatus(`${classroomCount} classroom${classroomCount === 1 ? '' : 's'} deleted`);
+        toast(`${classroomCount} classroom${classroomCount === 1 ? '' : 's'} and ${submissionIds.size} submission${submissionIds.size === 1 ? '' : 's'} deleted`);
+    } catch (error) {
+        setStatus(error.message || 'Unable to delete classrooms');
+        toast('Unable to delete selected classrooms');
+    } finally {
+        els.confirmDeleteBtn.disabled = false;
+    }
+}
+
+async function findSubmissionIdsForClassrooms(selected) {
+    const ids = new Set();
+    for (const classroom of selected) {
+        const lookups = [
+            ['classroomId', classroom.id],
+            ['classroomId', classroom.classCode],
+            ['sectionId', classroom.sectionId]
+        ].filter(([, value]) => String(value || '').trim());
+
+        for (const [field, value] of lookups) {
+            const snap = await getDocs(query(
+                collection(db, COLLECTIONS.submissions),
+                where(field, '==', value)
+            ));
+            snap.docs.forEach(item => ids.add(item.id));
+        }
+    }
+    return ids;
+}
+
+function selectedClassrooms() {
+    return classrooms.filter(classroom => selectedClassroomIds.has(classroom.id));
 }
 
 function filteredClassrooms() {

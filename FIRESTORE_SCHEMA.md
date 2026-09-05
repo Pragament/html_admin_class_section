@@ -1,6 +1,6 @@
 # Firestore Schema
 
-The teacher dashboard reads classroom and quiz submission data. It can create and update classrooms owned by the signed-in teacher. The separate admin pages manage class sections, section rosters, section access roles, and can list classrooms across all users.
+The teacher dashboard reads classroom and quiz submission data. It can create and update classrooms owned by the signed-in teacher. The separate admin pages manage class sections, section rosters, section access roles, classrooms across all users, and all quiz submissions.
 
 ## Firebase Auth
 
@@ -14,6 +14,12 @@ The classroom admin list reads all classroom documents:
 
 ```txt
 classrooms
+```
+
+The submissions admin list reads all quiz submission documents:
+
+```txt
+qb_quiz_submissions_v1
 ```
 
 ## Collections
@@ -52,6 +58,11 @@ Important fields:
 - `sectionId` - used as a submission lookup fallback for all students in the classroom section.
 - `sectionName` - shown in the dashboard.
 - `questionBankListId` - optional reference to a private question list selected by the teacher.
+
+Admin deletion behavior:
+
+- Bulk deleting classrooms deletes selected `/classrooms/{classroomId}` documents.
+- It also deletes matching `qb_quiz_submissions_v1` documents found by `classroomId == classroom.id`, `classroomId == classroom.classCode`, or `sectionId == classroom.sectionId`.
 
 ### `classSections`
 
@@ -237,6 +248,15 @@ Classroom admin list:
 ```txt
 classrooms
 ```
+
+Submission admin list:
+
+```txt
+qb_quiz_submissions_v1
+classrooms
+```
+
+The submissions admin page associates submissions to classrooms by document ID, class code, then section ID fallback.
 
 Question list dropdown:
 

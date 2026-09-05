@@ -96,6 +96,13 @@ a.btn,
     justify-content: space-between;
 }
 
+.toolbar-counts {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
 .btn {
     display: inline-flex;
     align-items: center;
@@ -130,6 +137,11 @@ a.btn,
     color: #fff;
     border-color: var(--danger);
     background: var(--danger);
+}
+
+.btn:disabled {
+    cursor: not-allowed;
+    opacity: 0.58;
 }
 
 .btn.small {
@@ -230,6 +242,10 @@ a.btn,
     width: min(380px, 100%);
 }
 
+.compact-field {
+    width: min(180px, 100%);
+}
+
 .count-chip,
 .status-chip {
     display: inline-flex;
@@ -271,6 +287,10 @@ a.btn,
     min-width: 680px;
 }
 
+.submissions-table {
+    min-width: 1180px;
+}
+
 .section-table th,
 .section-table td {
     border-bottom: 1px solid var(--line);
@@ -295,6 +315,23 @@ a.btn,
 .section-table code {
     color: var(--muted);
     font-size: 12px;
+}
+
+.section-table input[type="checkbox"] {
+    width: 16px;
+    height: 16px;
+    accent-color: var(--primary);
+}
+
+.sort-btn {
+    border: 0;
+    background: transparent;
+    color: inherit;
+    padding: 0;
+    font: inherit;
+    font-weight: 900;
+    text-align: left;
+    text-transform: inherit;
 }
 
 .muted-text {
@@ -486,6 +523,7 @@ a.btn,
     .file-btn,
     .role-select-field,
     .role-remove-btn,
+    .compact-field,
     .search-field {
         width: 100%;
     }

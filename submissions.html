@@ -3,18 +3,18 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>School Admin - Classrooms</title>
+    <title>School Admin - Submissions</title>
     <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
     <header class="topbar" id="topbar" hidden>
         <div>
             <h1>School Admin</h1>
-            <p id="statusText">List all classrooms</p>
+            <p id="statusText">List all quiz submissions</p>
         </div>
         <div class="topbar-actions">
             <a class="btn" href="index.html">Home</a>
-            <a class="btn" href="submissions.html">Submissions</a>
+            <a class="btn" href="classrooms.html">Classrooms</a>
             <button class="btn" id="refreshBtn" type="button">Refresh</button>
             <button class="btn" id="logoutBtn" type="button">Logout</button>
         </div>
@@ -23,24 +23,23 @@
     <main class="app-shell">
         <section class="login-panel" id="loginView">
             <div>
-                <h1>Classrooms</h1>
-                <p>Sign in with your school Google account to view classrooms.</p>
+                <h1>Submissions</h1>
+                <p>Sign in with your school Google account to view quiz submissions.</p>
             </div>
             <button class="btn primary wide-btn" id="loginBtn" type="button">Google Login</button>
             <a class="btn wide-btn" href="index.html">Back Home</a>
-            <a class="btn wide-btn" href="submissions.html">View Submissions</a>
+            <a class="btn wide-btn" href="classrooms.html">View Classrooms</a>
         </section>
 
         <section class="dashboard" id="dashboardView" hidden>
             <section class="panel action-panel">
                 <div>
-                    <h2>All Classrooms</h2>
+                    <h2>All Submissions</h2>
                     <p id="adminLabel"></p>
                 </div>
                 <div class="action-bar">
                     <a class="btn" href="index.html">Manage Sections</a>
-                    <a class="btn" href="submissions.html">Submissions</a>
-                    <button class="btn" id="exportClassroomsBtn" type="button">Export CSV</button>
+                    <a class="btn" href="classrooms.html">Classrooms</a>
                     <button class="btn danger" id="deleteSelectedBtn" type="button" disabled>Delete Selected</button>
                 </div>
             </section>
@@ -49,14 +48,22 @@
                 <div class="toolbar">
                     <label class="field search-field">
                         <span>Search</span>
-                        <input id="searchInput" type="search" placeholder="Code, classroom, section, id" />
+                        <input id="searchInput" type="search" placeholder="Student, classroom, section, subject, id" />
+                    </label>
+                    <label class="field compact-field">
+                        <span>Status</span>
+                        <select id="statusFilter">
+                            <option value="all">All</option>
+                            <option value="complete">Complete</option>
+                            <option value="partial">Partial</option>
+                        </select>
                     </label>
                     <div class="toolbar-counts">
-                        <span class="count-chip" id="classroomCount">0</span>
+                        <span class="count-chip" id="submissionCount">0</span>
                         <span class="count-chip" id="selectedCount">0 selected</span>
                     </div>
                 </div>
-                <div id="classroomTableWrap" class="table-wrap"></div>
+                <div id="submissionTableWrap" class="table-wrap"></div>
             </section>
         </section>
     </main>
@@ -64,7 +71,7 @@
     <dialog id="confirmDialog" class="modal confirm-modal">
         <form id="confirmForm" class="modal-card">
             <div>
-                <h2>Delete Classrooms?</h2>
+                <h2>Delete Submissions?</h2>
                 <p id="confirmText"></p>
             </div>
             <div class="form-actions">
@@ -75,6 +82,6 @@
     </dialog>
 
     <div id="toast" class="toast"></div>
-    <script type="module" src="classrooms.js"></script>
+    <script type="module" src="submissions.js"></script>
 </body>
 </html>

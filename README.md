@@ -6,6 +6,8 @@ Independent static app for school admins to sign in with Google and manage `clas
 
 - Google login with Firebase Auth.
 - Dedicated `/classrooms` list page for all users, with search, refresh, and CSV export.
+- Bulk delete classrooms from `/classrooms`, including matching quiz submissions.
+- Dedicated submissions admin page with filterable, sortable rows and bulk delete.
 - Create, edit, delete, search, and refresh class sections.
 - CSV export for current filtered sections.
 - CSV import for creating or updating sections.
@@ -38,6 +40,10 @@ id,classCode,className,sectionId,sectionName,questionBankListId,classEnabled,cre
 ```
 
 The classroom page reads all documents from `/classrooms` and includes `creatorId` in the table and export.
+
+## Submissions Admin
+
+The submissions page reads all documents from `qb_quiz_submissions_v1` and joins them with `/classrooms` by classroom document ID, class code, or section ID fallback.
 
 ## Admin Access
 
