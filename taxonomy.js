@@ -13,6 +13,7 @@ import {
     getDocs,
     getFirestore,
     serverTimestamp,
+    setDoc,
     updateDoc
 } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
 
@@ -36,6 +37,23 @@ const FIELD_BY_TYPE = {
     chapter: 'chapterId',
     topic: 'topicId'
 };
+const TAXONOMY_TYPES = ['class', 'subject', 'chapter', 'topic'];
+const CSV_COLUMNS = ['id', 'type', 'label', 'parentId', 'classId', 'subjectId', 'chapterId', 'topicId', 'verified'];
+const AI_IMPORT_PROMPT = `Create a CSV for Firestore qb_taxonomy_v1 import.
+
+Return only CSV, with this exact header:
+id,type,label,parentId,classId,subjectId,chapterId,topicId,verified
+
+Rules:
+- type must be one of class, subject, chapter, topic.
+- id should be deterministic lowercase snake-style taxonomy id using the parent path.
+- class rows have empty parentId and classId equal to id.
+- subject rows have parentId as class id, classId as class id, subjectId equal to id.
+- chapter rows have parentId as subject id, classId and subjectId populated, chapterId equal to id.
+- topic rows have parentId as chapter id, classId, subjectId, chapterId populated, topicId equal to id.
+- verified must be true or false.
+- Escape commas with CSV quotes when needed.
+- Do not include markdown fences or explanations.`;
 const ADMIN_EMAILS = [];
 
 const app = initializeApp(firebaseConfig);
@@ -47,6 +65,7 @@ let questions = [];
 let taxonomy = [];
 let selectedTaxonomyIds = new Set();
 let pendingAction = null;
+let pendingImportRows = [];
 let toastTimer = null;
 
 const $ = (id) => document.getElementById(id);
@@ -59,6 +78,8 @@ const els = {
     logoutBtn: $('logoutBtn'),
     refreshBtn: $('refreshBtn'),
     adminLabel: $('adminLabel'),
+    exportCsvBtn: $('exportCsvBtn'),
+    openImportBtn: $('openImportBtn'),
     markVerifiedBtn: $('markVerifiedBtn'),
     removeVerifiedBtn: $('removeVerifiedBtn'),
     mergeSelectedBtn: $('mergeSelectedBtn'),
@@ -78,6 +99,12 @@ const els = {
     mergeTargetSelect: $('mergeTargetSelect'),
     cancelActionBtn: $('cancelActionBtn'),
     confirmActionBtn: $('confirmActionBtn'),
+    importDialog: $('importDialog'),
+    importForm: $('importForm'),
+    closeImportBtn: $('closeImportBtn'),
+    copyPromptBtn: $('copyPromptBtn'),
+    csvFileInput: $('csvFileInput'),
+    csvPasteInput: $('csvPasteInput'),
     toast: $('toast')
 };
 
@@ -117,6 +144,12 @@ function bindEvents() {
     els.loginBtn.addEventListener('click', login);
     els.logoutBtn.addEventListener('click', () => signOut(auth));
     els.refreshBtn.addEventListener('click', loadData);
+    els.exportCsvBtn.addEventListener('click', exportTaxonomyCsv);
+    els.openImportBtn.addEventListener('click', openImportDialog);
+    els.closeImportBtn.addEventListener('click', () => els.importDialog.close());
+    els.copyPromptBtn.addEventListener('click', copyImportPrompt);
+    els.csvFileInput.addEventListener('change', readCsvFile);
+    els.importForm.addEventListener('submit', previewImportCsv);
     els.markVerifiedBtn.addEventListener('click', () => openActionDialog('verify'));
     els.removeVerifiedBtn.addEventListener('click', () => openActionDialog('unverify'));
     els.mergeSelectedBtn.addEventListener('click', () => openActionDialog('merge'));
@@ -247,6 +280,7 @@ function openActionDialog(action) {
     const selected = selectedTaxonomy();
     if (!selected.length) return;
     pendingAction = action;
+    pendingImportRows = [];
     els.mergeFields.hidden = action !== 'merge';
     els.confirmActionBtn.classList.toggle('danger', action === 'delete');
     if (action === 'merge') {
@@ -280,7 +314,8 @@ function openActionDialog(action) {
 async function runPendingAction(event) {
     event.preventDefault();
     const selected = selectedTaxonomy();
-    if (!pendingAction || !selected.length) return;
+    if (!pendingAction) return;
+    if (pendingAction !== 'import' && !selected.length) return;
     els.confirmActionBtn.disabled = true;
     try {
         if (pendingAction === 'delete') {
@@ -289,6 +324,10 @@ async function runPendingAction(event) {
         } else if (pendingAction === 'merge') {
             await mergeTaxonomy(selected, els.mergeTargetSelect.value);
             toast('Taxonomy merged');
+        } else if (pendingAction === 'import') {
+            await importTaxonomyRows(pendingImportRows);
+            toast(`${pendingImportRows.length} taxonomy item${pendingImportRows.length === 1 ? '' : 's'} imported`);
+            await loadData();
         } else {
             const verified = pendingAction === 'verify';
             for (const item of selected) {
@@ -303,6 +342,7 @@ async function runPendingAction(event) {
         }
         selectedTaxonomyIds = new Set();
         pendingAction = null;
+        pendingImportRows = [];
         els.confirmDialog.close();
         renderTaxonomy();
     } catch (error) {
@@ -310,6 +350,126 @@ async function runPendingAction(event) {
     } finally {
         els.confirmActionBtn.disabled = false;
     }
+}
+
+function exportTaxonomyCsv() {
+    const rows = [CSV_COLUMNS];
+    filteredTaxonomy().forEach(item => {
+        rows.push([
+            item.id,
+            item.type || '',
+            item.label || '',
+            item.parentId || '',
+            item.classId || '',
+            item.subjectId || '',
+            item.chapterId || '',
+            item.topicId || '',
+            item.verified ? 'true' : 'false'
+        ]);
+    });
+    downloadBlob(new Blob([toCsv(rows)], { type: 'text/csv;charset=utf-8' }), 'taxonomy.csv');
+}
+
+function openImportDialog() {
+    els.csvPasteInput.value = '';
+    els.csvFileInput.value = '';
+    els.importDialog.showModal();
+}
+
+async function copyImportPrompt() {
+    try {
+        await navigator.clipboard.writeText(AI_IMPORT_PROMPT);
+        toast('AI prompt copied');
+    } catch (error) {
+        els.csvPasteInput.value = AI_IMPORT_PROMPT;
+        toast('Prompt placed in CSV box');
+    }
+}
+
+async function readCsvFile(event) {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    els.csvPasteInput.value = await file.text();
+}
+
+function previewImportCsv(event) {
+    event.preventDefault();
+    const csv = els.csvPasteInput.value.trim();
+    if (!csv) {
+        toast('Paste CSV or choose a CSV file');
+        return;
+    }
+    try {
+        const rows = parseCsv(csv);
+        pendingImportRows = taxonomyRowsFromCsv(rows);
+        if (!pendingImportRows.length) {
+            toast('No valid taxonomy rows found');
+            return;
+        }
+        pendingAction = 'import';
+        els.mergeFields.hidden = true;
+        els.confirmActionBtn.classList.remove('danger');
+        els.confirmTitle.textContent = 'Import Taxonomy?';
+        els.confirmText.textContent = `This will create or update ${pendingImportRows.length} taxonomy item${pendingImportRows.length === 1 ? '' : 's'} in qb_taxonomy_v1.`;
+        els.confirmActionBtn.textContent = 'Import';
+        els.previewList.innerHTML = pendingImportRows.map(item => taxonomyPreview(item)).join('');
+        els.importDialog.close();
+        els.confirmDialog.showModal();
+    } catch (error) {
+        toast(error.message || 'Unable to parse CSV');
+    }
+}
+
+async function importTaxonomyRows(rows) {
+    for (const item of rows) {
+        await setDoc(doc(db, COLLECTIONS.taxonomy, item.id), {
+            type: item.type,
+            label: item.label,
+            parentId: item.parentId,
+            classId: item.classId,
+            subjectId: item.subjectId,
+            chapterId: item.chapterId,
+            topicId: item.topicId,
+            verified: item.verified,
+            updatedAt: serverTimestamp(),
+            updatedBy: currentUser.email || currentUser.uid
+        }, { merge: true });
+    }
+}
+
+function taxonomyRowsFromCsv(rows) {
+    if (rows.length < 2) return [];
+    const headers = rows[0].map(normalizeHeader);
+    const seen = new Set();
+    return rows.slice(1).map(row => {
+        const record = Object.fromEntries(headers.map((header, index) => [header, row[index] ?? '']));
+        return taxonomyCsvData(record);
+    }).filter(item => {
+        if (!item.id || !item.label || !TAXONOMY_TYPES.includes(item.type) || seen.has(item.id)) return false;
+        seen.add(item.id);
+        return true;
+    });
+}
+
+function taxonomyCsvData(record) {
+    const type = String(record.type || '').trim().toLowerCase();
+    const id = String(record.id || record.taxonomyid || '').trim();
+    const item = {
+        id,
+        type,
+        label: String(record.label || record.name || '').trim(),
+        parentId: String(record.parentid || '').trim(),
+        classId: String(record.classid || '').trim(),
+        subjectId: String(record.subjectid || '').trim(),
+        chapterId: String(record.chapterid || '').trim(),
+        topicId: String(record.topicid || '').trim(),
+        verified: parseBoolean(record.verified, false)
+    };
+    if (type === 'class' && !item.classId) item.classId = id;
+    if (type === 'subject' && !item.subjectId) item.subjectId = id;
+    if (type === 'chapter' && !item.chapterId) item.chapterId = id;
+    if (type === 'topic' && !item.topicId) item.topicId = id;
+    return item;
 }
 
 async function deleteTaxonomy(item) {
@@ -382,6 +542,63 @@ function compareTaxonomy(a, b) {
     const typeCompare = String(a.type || '').localeCompare(String(b.type || ''), undefined, { sensitivity: 'base' });
     if (typeCompare !== 0) return typeCompare;
     return String(a.label || a.id).localeCompare(String(b.label || b.id), undefined, { numeric: true, sensitivity: 'base' });
+}
+
+function parseCsv(text) {
+    const rows = [];
+    let row = [];
+    let value = '';
+    let inQuotes = false;
+    for (let index = 0; index < text.length; index += 1) {
+        const char = text[index];
+        const next = text[index + 1];
+        if (char === '"' && inQuotes && next === '"') {
+            value += '"';
+            index += 1;
+        } else if (char === '"') {
+            inQuotes = !inQuotes;
+        } else if (char === ',' && !inQuotes) {
+            row.push(value);
+            value = '';
+        } else if ((char === '\n' || char === '\r') && !inQuotes) {
+            if (char === '\r' && next === '\n') index += 1;
+            row.push(value);
+            rows.push(row);
+            row = [];
+            value = '';
+        } else {
+            value += char;
+        }
+    }
+    row.push(value);
+    if (row.length > 1 || row[0]) rows.push(row);
+    return rows;
+}
+
+function toCsv(rows) {
+    return rows.map(row => row.map(value => {
+        const text = String(value ?? '');
+        return /[",\n\r]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text;
+    }).join(',')).join('\n');
+}
+
+function normalizeHeader(value) {
+    return String(value || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+}
+
+function parseBoolean(value, fallback) {
+    const text = String(value ?? '').trim().toLowerCase();
+    if (!text) return fallback;
+    return ['true', '1', 'yes', 'y', 'verified'].includes(text);
+}
+
+function downloadBlob(blob, name) {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = name;
+    a.click();
+    URL.revokeObjectURL(url);
 }
 
 function stripHtml(value) {

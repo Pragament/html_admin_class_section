@@ -40,6 +40,8 @@
                 </div>
                 <div class="action-bar">
                     <a class="btn" href="questions.html">Questions</a>
+                    <button class="btn" id="exportCsvBtn" type="button">Export CSV</button>
+                    <button class="btn" id="openImportBtn" type="button">Import CSV</button>
                     <button class="btn" id="markVerifiedBtn" type="button" disabled>Mark Verified</button>
                     <button class="btn" id="removeVerifiedBtn" type="button" disabled>Remove Verified</button>
                     <button class="btn" id="mergeSelectedBtn" type="button" disabled>Merge</button>
@@ -97,6 +99,32 @@
             <div class="form-actions">
                 <button class="btn" id="cancelActionBtn" type="button">Cancel</button>
                 <button class="btn danger" id="confirmActionBtn" type="submit">Confirm</button>
+            </div>
+        </form>
+    </dialog>
+
+    <dialog id="importDialog" class="modal preview-modal">
+        <form id="importForm" class="modal-card">
+            <div class="modal-head">
+                <div>
+                    <h2>Import Taxonomy CSV</h2>
+                    <p>Paste CSV or choose a file, then preview before importing.</p>
+                </div>
+                <button class="btn" id="closeImportBtn" type="button">Cancel</button>
+            </div>
+            <div class="form-actions">
+                <button class="btn" id="copyPromptBtn" type="button">Copy AI Prompt</button>
+                <label class="btn file-btn">
+                    Choose CSV
+                    <input id="csvFileInput" type="file" accept=".csv,text/csv" />
+                </label>
+            </div>
+            <label class="field">
+                <span>CSV</span>
+                <textarea id="csvPasteInput" rows="12" placeholder="id,type,label,parentId,classId,subjectId,chapterId,topicId,verified"></textarea>
+            </label>
+            <div class="form-actions">
+                <button class="btn primary" type="submit">Preview Import</button>
             </div>
         </form>
     </dialog>
