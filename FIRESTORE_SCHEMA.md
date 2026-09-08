@@ -152,6 +152,74 @@ Student CSV import/export columns:
 id,studentName,phone,enabled
 ```
 
+### `qb_questions_v1`
+
+Path:
+
+```txt
+/qb_questions_v1/{questionId}
+```
+
+Admin-relevant fields:
+
+```js
+{
+  type: 'mcq',
+  classId: 'class_ix',
+  subjectId: 'class_ix__subject_mathematics',
+  chapterId: 'class_ix__subject_mathematics__chapter_algebra',
+  topicId: 'class_ix__subject_mathematics__chapter_algebra__topic_polynomials',
+  difficulty: 'Easy',
+  status: 'published',
+  verified: true,
+  promptHtml: '<p>Question text</p>',
+  authorUid: 'firebase-auth-uid',
+  authorName: 'Teacher Name',
+  createdAt: Timestamp,
+  updatedAt: Timestamp
+}
+```
+
+Admin moderation:
+
+- Questions can be filtered by search, status, verified state, minimum likes, and minimum dislikes.
+- Like/dislike counts are computed from `qb_reactions_v1`.
+- Bulk verified actions set `verified` to `true` or `false`.
+- Bulk delete hard deletes selected question documents after a detailed confirmation preview.
+
+### `qb_taxonomy_v1`
+
+Path:
+
+```txt
+/qb_taxonomy_v1/{taxonomyId}
+```
+
+Admin-relevant fields:
+
+```js
+{
+  type: 'class' | 'subject' | 'chapter' | 'topic',
+  label: 'Polynomials',
+  parentId: 'class_ix__subject_mathematics__chapter_algebra',
+  classId: 'class_ix',
+  subjectId: 'class_ix__subject_mathematics',
+  chapterId: 'class_ix__subject_mathematics__chapter_algebra',
+  topicId: 'class_ix__subject_mathematics__chapter_algebra__topic_polynomials',
+  verified: true,
+  updatedAt: Timestamp
+}
+```
+
+Admin moderation:
+
+- Taxonomy can be filtered by search, type, and verified state.
+- Bulk verified actions set `verified` to `true` or `false`.
+- Bulk delete hard deletes selected taxonomy documents after a detailed confirmation preview.
+- Merge requires selected taxonomy items and the target taxonomy item to have the same `type`.
+- Merge rewrites questions that reference the old taxonomy IDs, then deletes the old taxonomy documents.
+- The question field updated during merge is based on taxonomy `type`: `classId`, `subjectId`, `chapterId`, or `topicId`.
+
 ### `qb_lists_v1`
 
 Path:
@@ -259,6 +327,20 @@ classrooms
 ```
 
 The submissions admin page associates submissions to classrooms by document ID, class code, then section ID fallback. Its date filter defaults to today's local date and checks `submittedAtMillis`, falling back to `submittedAt` when needed.
+
+Question admin list:
+
+```txt
+qb_questions_v1
+qb_reactions_v1
+```
+
+Taxonomy admin list:
+
+```txt
+qb_taxonomy_v1
+qb_questions_v1
+```
 
 Question list dropdown:
 

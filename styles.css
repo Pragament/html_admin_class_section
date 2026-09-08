@@ -291,6 +291,10 @@ a.btn,
     min-width: 1180px;
 }
 
+.moderation-table {
+    min-width: 1220px;
+}
+
 .section-table th,
 .section-table td {
     border-bottom: 1px solid var(--line);
@@ -438,6 +442,10 @@ a.btn,
     width: min(460px, calc(100vw - 24px));
 }
 
+.preview-modal {
+    width: min(860px, calc(100vw - 24px));
+}
+
 .modal::backdrop {
     background: rgba(7, 18, 31, 0.52);
 }
@@ -458,6 +466,65 @@ a.btn,
     justify-content: space-between;
     gap: 12px;
     align-items: flex-start;
+}
+
+.preview-list {
+    display: grid;
+    gap: 10px;
+    max-height: min(52vh, 520px);
+    overflow: auto;
+}
+
+.preview-card {
+    display: grid;
+    gap: 8px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: var(--panel-soft);
+    padding: 12px;
+}
+
+.preview-card dl {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px 12px;
+    margin: 0;
+}
+
+.preview-card dl div {
+    min-width: 0;
+}
+
+.preview-card dt {
+    color: #41546b;
+    font-size: 11px;
+    font-weight: 900;
+    text-transform: uppercase;
+}
+
+.preview-card dd {
+    margin: 2px 0 0;
+    overflow-wrap: anywhere;
+    font-size: 13px;
+}
+
+.preview-snippet {
+    max-width: 420px;
+    overflow: hidden;
+    color: var(--text);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.merge-fields {
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: var(--panel-soft);
+    padding: 12px;
+}
+
+.mini-field {
+    width: min(120px, 100%);
 }
 
 .form-grid {
@@ -524,6 +591,7 @@ a.btn,
     .role-select-field,
     .role-remove-btn,
     .compact-field,
+    .mini-field,
     .search-field {
         width: 100%;
     }

@@ -3,20 +3,19 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>School Admin - Submissions</title>
+    <title>School Admin - Taxonomy</title>
     <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
     <header class="topbar" id="topbar" hidden>
         <div>
             <h1>School Admin</h1>
-            <p id="statusText">List all quiz submissions</p>
+            <p id="statusText">Moderate question taxonomy</p>
         </div>
         <div class="topbar-actions">
             <a class="btn" href="index.html">Home</a>
-            <a class="btn" href="classrooms.html">Classrooms</a>
             <a class="btn" href="questions.html">Questions</a>
-            <a class="btn" href="taxonomy.html">Taxonomy</a>
+            <a class="btn" href="submissions.html">Submissions</a>
             <button class="btn" id="refreshBtn" type="button">Refresh</button>
             <button class="btn" id="logoutBtn" type="button">Logout</button>
         </div>
@@ -25,27 +24,25 @@
     <main class="app-shell">
         <section class="login-panel" id="loginView">
             <div>
-                <h1>Submissions</h1>
-                <p>Sign in with your school Google account to view quiz submissions.</p>
+                <h1>Taxonomy</h1>
+                <p>Sign in with your school Google account to moderate taxonomy.</p>
             </div>
             <button class="btn primary wide-btn" id="loginBtn" type="button">Google Login</button>
             <a class="btn wide-btn" href="index.html">Back Home</a>
-            <a class="btn wide-btn" href="classrooms.html">View Classrooms</a>
             <a class="btn wide-btn" href="questions.html">Manage Questions</a>
-            <a class="btn wide-btn" href="taxonomy.html">Manage Taxonomy</a>
         </section>
 
         <section class="dashboard" id="dashboardView" hidden>
             <section class="panel action-panel">
                 <div>
-                    <h2>All Submissions</h2>
+                    <h2>Taxonomy Moderation</h2>
                     <p id="adminLabel"></p>
                 </div>
                 <div class="action-bar">
-                    <a class="btn" href="index.html">Manage Sections</a>
-                    <a class="btn" href="classrooms.html">Classrooms</a>
                     <a class="btn" href="questions.html">Questions</a>
-                    <a class="btn" href="taxonomy.html">Taxonomy</a>
+                    <button class="btn" id="markVerifiedBtn" type="button" disabled>Mark Verified</button>
+                    <button class="btn" id="removeVerifiedBtn" type="button" disabled>Remove Verified</button>
+                    <button class="btn" id="mergeSelectedBtn" type="button" disabled>Merge</button>
                     <button class="btn danger" id="deleteSelectedBtn" type="button" disabled>Delete Selected</button>
                 </div>
             </section>
@@ -54,44 +51,57 @@
                 <div class="toolbar">
                     <label class="field search-field">
                         <span>Search</span>
-                        <input id="searchInput" type="search" placeholder="Student, classroom, section, subject, id" />
+                        <input id="searchInput" type="search" placeholder="Label, id, parent" />
                     </label>
                     <label class="field compact-field">
-                        <span>Status</span>
-                        <select id="statusFilter">
+                        <span>Type</span>
+                        <select id="typeFilter">
                             <option value="all">All</option>
-                            <option value="complete">Complete</option>
-                            <option value="partial">Partial</option>
+                            <option value="class">Class</option>
+                            <option value="subject">Subject</option>
+                            <option value="chapter">Chapter</option>
+                            <option value="topic">Topic</option>
                         </select>
                     </label>
                     <label class="field compact-field">
-                        <span>Date</span>
-                        <input id="dateFilter" type="date" />
+                        <span>Verified</span>
+                        <select id="verifiedFilter">
+                            <option value="all">All</option>
+                            <option value="verified">Verified</option>
+                            <option value="unverified">Unverified</option>
+                        </select>
                     </label>
                     <div class="toolbar-counts">
-                        <span class="count-chip" id="submissionCount">0</span>
+                        <span class="count-chip" id="taxonomyCount">0</span>
                         <span class="count-chip" id="selectedCount">0 selected</span>
                     </div>
                 </div>
-                <div id="submissionTableWrap" class="table-wrap"></div>
+                <div id="taxonomyTableWrap" class="table-wrap"></div>
             </section>
         </section>
     </main>
 
-    <dialog id="confirmDialog" class="modal confirm-modal">
+    <dialog id="confirmDialog" class="modal preview-modal">
         <form id="confirmForm" class="modal-card">
             <div>
-                <h2>Delete Submissions?</h2>
+                <h2 id="confirmTitle">Confirm</h2>
                 <p id="confirmText"></p>
             </div>
+            <div id="previewList" class="preview-list"></div>
+            <div id="mergeFields" class="merge-fields" hidden>
+                <label class="field">
+                    <span>Merge Into</span>
+                    <select id="mergeTargetSelect"></select>
+                </label>
+            </div>
             <div class="form-actions">
-                <button class="btn" id="cancelDeleteBtn" type="button">Cancel</button>
-                <button class="btn danger" id="confirmDeleteBtn" type="submit">Delete</button>
+                <button class="btn" id="cancelActionBtn" type="button">Cancel</button>
+                <button class="btn danger" id="confirmActionBtn" type="submit">Confirm</button>
             </div>
         </form>
     </dialog>
 
     <div id="toast" class="toast"></div>
-    <script type="module" src="submissions.js"></script>
+    <script type="module" src="taxonomy.js"></script>
 </body>
 </html>

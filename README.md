@@ -8,6 +8,8 @@ Independent static app for school admins to sign in with Google and manage `clas
 - Dedicated `/classrooms` list page for all users, with search, refresh, and CSV export.
 - Bulk delete classrooms from `/classrooms`, including matching quiz submissions.
 - Dedicated submissions admin page with filterable, sortable rows and bulk delete.
+- Question moderation page for filtering by likes/dislikes, bulk verified flag updates, and previewed bulk deletes.
+- Taxonomy moderation page for filtering, bulk verified flag updates, previewed deletes, and merging duplicate taxonomy references.
 - Create, edit, delete, search, and refresh class sections.
 - CSV export for current filtered sections.
 - CSV import for creating or updating sections.
@@ -44,6 +46,14 @@ The classroom page reads all documents from `/classrooms`, shows creator email a
 ## Submissions Admin
 
 The submissions page reads all documents from `qb_quiz_submissions_v1`, joins them with `/classrooms` by classroom document ID, class code, or section ID fallback, and defaults the date filter to today.
+
+## Question Moderation
+
+The questions page reads `qb_questions_v1` and `qb_reactions_v1`, computes like/dislike counts client-side, and supports bulk setting or removing `verified`. Bulk delete shows a detailed preview before deleting selected question documents.
+
+## Taxonomy Moderation
+
+The taxonomy page reads `qb_taxonomy_v1` and `qb_questions_v1`, supports bulk setting or removing `verified`, previewed deletes, and merging selected taxonomy items into a compatible target. Merge updates matching question reference fields before deleting the old taxonomy documents.
 
 ## Admin Access
 
