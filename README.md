@@ -36,14 +36,14 @@ Student imports are scoped to the section currently open in the admin UI. Rows w
 ## Classroom CSV Columns
 
 ```txt
-id,classCode,className,sectionId,sectionName,questionBankListId,classEnabled,creatorId,createdDate
+id,classCode,className,sectionId,sectionName,questionBankListId,classEnabled,createdBy,creatorId,createdAt,createdDate
 ```
 
-The classroom page reads all documents from `/classrooms` and includes `creatorId` in the table and export.
+The classroom page reads all documents from `/classrooms`, shows creator email and created time, and sorts newest classrooms first.
 
 ## Submissions Admin
 
-The submissions page reads all documents from `qb_quiz_submissions_v1` and joins them with `/classrooms` by classroom document ID, class code, or section ID fallback.
+The submissions page reads all documents from `qb_quiz_submissions_v1`, joins them with `/classrooms` by classroom document ID, class code, or section ID fallback, and defaults the date filter to today.
 
 ## Admin Access
 

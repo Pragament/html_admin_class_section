@@ -53,6 +53,8 @@ Document shape:
 Important fields:
 
 - `creatorId` - must match the signed-in teacher UID for the teacher dashboard. The admin classroom list shows classrooms from all creators and displays this value.
+- `createdBy` - creator email shown in the admin classroom list when available.
+- `createdAt` - shown as a human-readable timestamp in the admin classroom list. Classrooms are sorted newest first using `createdAt`, then `createdDate`.
 - `classCode` - shown in classroom cards and used as a submission lookup fallback.
 - `classEnabled` - shown as enabled/disabled.
 - `sectionId` - used as a submission lookup fallback for all students in the classroom section.
@@ -256,7 +258,7 @@ qb_quiz_submissions_v1
 classrooms
 ```
 
-The submissions admin page associates submissions to classrooms by document ID, class code, then section ID fallback.
+The submissions admin page associates submissions to classrooms by document ID, class code, then section ID fallback. Its date filter defaults to today's local date and checks `submittedAtMillis`, falling back to `submittedAt` when needed.
 
 Question list dropdown:
 

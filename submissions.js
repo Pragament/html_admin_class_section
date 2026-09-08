@@ -55,6 +55,7 @@ const els = {
     deleteSelectedBtn: $('deleteSelectedBtn'),
     searchInput: $('searchInput'),
     statusFilter: $('statusFilter'),
+    dateFilter: $('dateFilter'),
     submissionCount: $('submissionCount'),
     selectedCount: $('selectedCount'),
     submissionTableWrap: $('submissionTableWrap'),
@@ -67,6 +68,7 @@ const els = {
 };
 
 bindEvents();
+els.dateFilter.value = todayInputValue();
 
 onAuthStateChanged(auth, async (user) => {
     currentUser = user;
@@ -105,6 +107,7 @@ function bindEvents() {
     els.deleteSelectedBtn.addEventListener('click', openDeleteDialog);
     els.searchInput.addEventListener('input', renderSubmissions);
     els.statusFilter.addEventListener('change', renderSubmissions);
+    els.dateFilter.addEventListener('change', renderSubmissions);
     els.submissionTableWrap.addEventListener('click', handleTableClick);
     els.submissionTableWrap.addEventListener('change', handleTableSelection);
     els.cancelDeleteBtn.addEventListener('click', () => els.confirmDialog.close());
@@ -169,7 +172,7 @@ function renderSubmissions() {
                     return `
                         <tr>
                             <td><input type="checkbox" data-select-submission="${esc(submission.id)}" ${selectedSubmissionIds.has(submission.id) ? 'checked' : ''} /></td>
-                            <td>${esc(formatDate(submission.submittedAtMillis))}</td>
+                            <td>${esc(formatDate(submittedMillis(submission)))}</td>
                             <td><strong>${esc(submission.studentName || submission.name || '')}</strong></td>
                             <td>${esc(classroomLabel(classroom) || submission.className || '')}</td>
                             <td>${esc(submission.sectionName || classroom?.sectionName || submission.sectionId || '')}</td>
@@ -237,6 +240,7 @@ function filteredSubmissions() {
         const complete = Number(submission.answeredCount || 0) >= Number(submission.questionCount || 0);
         if (status === 'complete' && !complete) return false;
         if (status === 'partial' && complete) return false;
+        if (!matchesDateFilter(submission)) return false;
         if (!search) return true;
         return [
             submission.id,
@@ -268,7 +272,7 @@ function sortValue(submission, key) {
     if (key === 'sectionName') return submission.sectionName || classroom?.sectionName || submission.sectionId || '';
     if (key === 'score') return Number(submission.correctCount || 0);
     if (key === 'answeredCount') return Number(submission.answeredCount || 0);
-    if (key === 'submittedAtMillis') return Number(submission.submittedAtMillis || 0);
+    if (key === 'submittedAtMillis') return submittedMillis(submission);
     return submission[key] || '';
 }
 
@@ -345,6 +349,36 @@ function formatDate(value) {
     const millis = Number(value || 0);
     if (!millis) return '';
     return new Date(millis).toLocaleString();
+}
+
+function matchesDateFilter(submission) {
+    const selectedDate = els.dateFilter.value;
+    if (!selectedDate) return true;
+    const millis = submittedMillis(submission);
+    if (!millis) return false;
+    const [year, month, day] = selectedDate.split('-').map(Number);
+    const start = new Date(year, month - 1, day).getTime();
+    const end = new Date(year, month - 1, day + 1).getTime();
+    return millis >= start && millis < end;
+}
+
+function submittedMillis(submission) {
+    if (Number.isFinite(Number(submission.submittedAtMillis))) return Number(submission.submittedAtMillis);
+    const submittedAt = submission.submittedAt;
+    if (submittedAt?.toMillis) return submittedAt.toMillis();
+    if (submittedAt?.toDate) return submittedAt.toDate().getTime();
+    if (Number.isFinite(Number(submittedAt?.seconds))) {
+        return (Number(submittedAt.seconds) * 1000) + Math.floor(Number(submittedAt.nanoseconds || 0) / 1000000);
+    }
+    return 0;
+}
+
+function todayInputValue() {
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
 }
 
 function setStatus(message) {

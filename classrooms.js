@@ -40,7 +40,9 @@ const CSV_COLUMNS = [
     'sectionName',
     'questionBankListId',
     'classEnabled',
+    'createdBy',
     'creatorId',
+    'createdAt',
     'createdDate'
 ];
 
@@ -160,7 +162,8 @@ function renderClassrooms() {
                     <th scope="col">Section</th>
                     <th scope="col">Question List</th>
                     <th scope="col">Status</th>
-                    <th scope="col">Creator</th>
+                    <th scope="col">Creator Email</th>
+                    <th scope="col">Created</th>
                     <th scope="col">ID</th>
                 </tr>
             </thead>
@@ -173,7 +176,8 @@ function renderClassrooms() {
                         <td>${esc(classroom.sectionName || '')}</td>
                         <td><code>${esc(classroom.questionBankListId || '')}</code></td>
                         <td><span class="status-chip ${classroom.classEnabled === false ? 'disabled' : 'enabled'}">${classroom.classEnabled === false ? 'Disabled' : 'Enabled'}</span></td>
-                        <td><code>${esc(classroom.creatorId || '')}</code></td>
+                        <td><code>${esc(creatorEmail(classroom))}</code></td>
+                        <td>${esc(formatDate(createdMillis(classroom)))}</td>
                         <td><code>${esc(classroom.id)}</code></td>
                     </tr>
                 `).join('')}
@@ -283,7 +287,12 @@ function filteredClassrooms() {
             classroom.className,
             classroom.sectionId,
             classroom.sectionName,
-            classroom.questionBankListId
+            classroom.questionBankListId,
+            classroom.createdBy,
+            classroom.creatorEmail,
+            classroom.email,
+            classroom.creatorId,
+            formatDate(createdMillis(classroom))
         ]
             .some(value => String(value || '').toLowerCase().includes(search));
     });
@@ -300,7 +309,9 @@ function exportClassroomsCsv() {
             classroom.sectionName || '',
             classroom.questionBankListId || '',
             classroom.classEnabled === false ? 'false' : 'true',
+            creatorEmail(classroom),
             classroom.creatorId || '',
+            formatDate(createdMillis(classroom)),
             classroom.createdDate ?? ''
         ]);
     });
@@ -308,14 +319,35 @@ function exportClassroomsCsv() {
 }
 
 function compareClassrooms(a, b) {
-    const dateA = Number.isFinite(Number(a.createdDate)) ? Number(a.createdDate) : 0;
-    const dateB = Number.isFinite(Number(b.createdDate)) ? Number(b.createdDate) : 0;
+    const dateA = createdMillis(a);
+    const dateB = createdMillis(b);
     if (dateA !== dateB) return dateB - dateA;
     return classroomLabel(a).localeCompare(classroomLabel(b), undefined, { numeric: true, sensitivity: 'base' });
 }
 
 function classroomLabel(classroom) {
     return classroom.className || classroom.sectionName || classroom.classCode || classroom.id;
+}
+
+function creatorEmail(classroom) {
+    return classroom.createdBy || classroom.creatorEmail || classroom.email || '';
+}
+
+function createdMillis(classroom) {
+    const createdAt = classroom.createdAt;
+    if (createdAt?.toMillis) return createdAt.toMillis();
+    if (createdAt?.toDate) return createdAt.toDate().getTime();
+    if (Number.isFinite(Number(createdAt?.seconds))) {
+        return (Number(createdAt.seconds) * 1000) + Math.floor(Number(createdAt.nanoseconds || 0) / 1000000);
+    }
+    if (Number.isFinite(Number(classroom.createdDate))) return Number(classroom.createdDate);
+    return 0;
+}
+
+function formatDate(value) {
+    const millis = Number(value || 0);
+    if (!millis) return '';
+    return new Date(millis).toLocaleString();
 }
 
 function toCsv(rows) {

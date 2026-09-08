@@ -3,14 +3,14 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>School Admin - Classrooms</title>
+    <title>School Admin - Quiz Sessions</title>
     <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
     <header class="topbar" id="topbar" hidden>
         <div>
             <h1>School Admin</h1>
-            <p id="statusText">List all classrooms</p>
+            <p id="statusText">List all quiz sessions</p>
         </div>
         <div class="topbar-actions">
             <a class="btn" href="index.html">Home</a>
@@ -23,8 +23,8 @@
     <main class="app-shell">
         <section class="login-panel" id="loginView">
             <div>
-                <h1>Classrooms</h1>
-                <p>Sign in with your school Google account to view classrooms.</p>
+                <h1>Quiz Sessions</h1>
+                <p>Sign in with your school Google account to view quiz sessions.</p>
             </div>
             <button class="btn primary wide-btn" id="loginBtn" type="button">Google Login</button>
             <a class="btn wide-btn" href="index.html">Back Home</a>
@@ -34,7 +34,7 @@
         <section class="dashboard" id="dashboardView" hidden>
             <section class="panel action-panel">
                 <div>
-                    <h2>All Classrooms</h2>
+                    <h2>All Quiz Sessions</h2>
                     <p id="adminLabel"></p>
                 </div>
                 <div class="action-bar">
@@ -49,7 +49,7 @@
                 <div class="toolbar">
                     <label class="field search-field">
                         <span>Search</span>
-                        <input id="searchInput" type="search" placeholder="Code, classroom, section, id" />
+                        <input id="searchInput" type="search" placeholder="Code, quiz session, section, id" />
                     </label>
                     <div class="toolbar-counts">
                         <span class="count-chip" id="classroomCount">0</span>
@@ -64,7 +64,7 @@
     <dialog id="confirmDialog" class="modal confirm-modal">
         <form id="confirmForm" class="modal-card">
             <div>
-                <h2>Delete Classrooms?</h2>
+                <h2>Delete Quiz Sessions?</h2>
                 <p id="confirmText"></p>
             </div>
             <div class="form-actions">
