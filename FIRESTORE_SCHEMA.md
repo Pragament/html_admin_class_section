@@ -216,7 +216,7 @@ Admin moderation:
 - Taxonomy can be filtered by search, type, and verified state.
 - Bulk verified actions set `verified` to `true` or `false`.
 - Bulk delete hard deletes selected taxonomy documents after a detailed confirmation preview.
-- Merge requires selected taxonomy items and the target taxonomy item to have the same `type`.
+- Merge requires selected taxonomy items and the target taxonomy item to have the same `type`. The target can be one of the selected rows; it is kept while the other selected rows are merged into it.
 - Merge rewrites questions that reference the old taxonomy IDs, then deletes the old taxonomy documents.
 - The question field updated during merge is based on taxonomy `type`: `classId`, `subjectId`, `chapterId`, or `topicId`.
 

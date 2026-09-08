@@ -252,7 +252,7 @@ function openActionDialog(action) {
     if (action === 'merge') {
         const type = selected[0].type;
         const sameType = selected.every(item => item.type === type);
-        const candidates = taxonomy.filter(item => item.type === type && !selectedTaxonomyIds.has(item.id));
+        const candidates = taxonomy.filter(item => item.type === type);
         if (!sameType || !candidates.length) {
             toast(sameType ? 'No compatible merge targets found' : 'Select one taxonomy type before merging');
             pendingAction = null;
@@ -267,7 +267,7 @@ function openActionDialog(action) {
         verify: ['Mark Taxonomy Verified?', `This will set verified = true on ${selected.length} taxonomy item${selected.length === 1 ? '' : 's'}.`, 'Mark Verified'],
         unverify: ['Remove Verified Flag?', `This will set verified = false on ${selected.length} taxonomy item${selected.length === 1 ? '' : 's'}.`, 'Remove Verified'],
         delete: ['Delete Taxonomy?', `This will hard delete ${selected.length} taxonomy item${selected.length === 1 ? '' : 's'}.`, 'Delete'],
-        merge: ['Merge Taxonomy?', `This will update questions that reference the selected taxonomy item${selected.length === 1 ? '' : 's'} to use the chosen target, then delete the old taxonomy item${selected.length === 1 ? '' : 's'}.`, 'Merge']
+        merge: ['Merge Taxonomy?', `This will update questions that reference the selected taxonomy item${selected.length === 1 ? '' : 's'} to use the chosen target, then delete the old selected taxonomy item${selected.length === 1 ? '' : 's'}. If the target is selected, it will be kept.`, 'Merge']
     };
     const [title, text, button] = actionLabels[action];
     els.confirmTitle.textContent = title;
@@ -320,7 +320,9 @@ async function deleteTaxonomy(item) {
 async function mergeTaxonomy(selected, targetId) {
     const target = taxonomy.find(item => item.id === targetId);
     if (!target) throw new Error('Choose a merge target');
-    for (const oldItem of selected) {
+    const sources = selected.filter(item => item.id !== target.id);
+    if (!sources.length) throw new Error('Select at least one old taxonomy item in addition to the target');
+    for (const oldItem of sources) {
         if (oldItem.type !== target.type) throw new Error('Merge target must use the same taxonomy type');
         const field = FIELD_BY_TYPE[oldItem.type];
         if (!field) throw new Error('Unsupported taxonomy type');
