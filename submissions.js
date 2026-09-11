@@ -179,7 +179,7 @@ function renderSubmissions() {
                             <td>${esc(submission.subject || '')}</td>
                             <td>${esc(scoreLabel(submission))}</td>
                             <td>${esc(answeredLabel(submission))}</td>
-                            <td><code>${esc(submission.classroomId || '')}</code></td>
+                            <td>${renderClassroomLink(submission.classroomId)}</td>
                             <td><code>${esc(submission.id)}</code></td>
                         </tr>
                     `;
@@ -194,6 +194,13 @@ function sortHeader(key, label) {
     const active = sortState.key === key;
     const marker = active ? (sortState.direction === 'asc' ? ' ↑' : ' ↓') : '';
     return `<th scope="col"><button class="sort-btn" type="button" data-sort="${key}">${esc(label)}${marker}</button></th>`;
+}
+
+function renderClassroomLink(classroomId) {
+    const id = String(classroomId || '').trim();
+    if (!id) return '';
+    const href = `/classrooms.html?classroomId=${encodeURIComponent(id)}`;
+    return `<a class="table-link" href="${href}" target="_blank" rel="noopener noreferrer"><code>${esc(id)}</code></a>`;
 }
 
 function handleTableClick(event) {

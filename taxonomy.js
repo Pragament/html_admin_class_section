@@ -38,22 +38,21 @@ const FIELD_BY_TYPE = {
     topic: 'topicId'
 };
 const TAXONOMY_TYPES = ['class', 'subject', 'chapter', 'topic'];
-const CSV_COLUMNS = ['id', 'type', 'label', 'parentId', 'classId', 'subjectId', 'chapterId', 'topicId', 'verified'];
+const CSV_COLUMNS = ['id', 'type', 'label', 'parentId', 'verified'];
 const AI_IMPORT_PROMPT = `Create a CSV for Firestore qb_taxonomy_v1 import.
 
-Return only CSV, with this exact header:
-id,type,label,parentId,classId,subjectId,chapterId,topicId,verified
+Return only valid CSV inside one csv code block, with this exact header:
+id,type,label,parentId,verified
 
 Rules:
 - type must be one of class, subject, chapter, topic.
 - id should be deterministic lowercase snake-style taxonomy id using the parent path.
-- class rows have empty parentId and classId equal to id.
-- subject rows have parentId as class id, classId as class id, subjectId equal to id.
-- chapter rows have parentId as subject id, classId and subjectId populated, chapterId equal to id.
-- topic rows have parentId as chapter id, classId, subjectId, chapterId populated, topicId equal to id.
+- parentId should be empty for class rows.
+- parentId should be the immediate parent taxonomy id for subject, chapter, and topic rows.
+- Do not include separate classId, subjectId, chapterId, or topicId columns; the id is enough and type determines the reference field.
 - verified must be true or false.
-- Escape commas with CSV quotes when needed.
-- Do not include markdown fences or explanations.`;
+- Escape commas and quotation marks correctly according to CSV rules.
+- Do not include explanations outside the csv code block.`;
 const ADMIN_EMAILS = [];
 
 const app = initializeApp(firebaseConfig);
@@ -97,6 +96,8 @@ const els = {
     previewList: $('previewList'),
     mergeFields: $('mergeFields'),
     mergeTargetSelect: $('mergeTargetSelect'),
+    importOptions: $('importOptions'),
+    importOnlyNewInput: $('importOnlyNewInput'),
     cancelActionBtn: $('cancelActionBtn'),
     confirmActionBtn: $('confirmActionBtn'),
     importDialog: $('importDialog'),
@@ -150,6 +151,7 @@ function bindEvents() {
     els.copyPromptBtn.addEventListener('click', copyImportPrompt);
     els.csvFileInput.addEventListener('change', readCsvFile);
     els.importForm.addEventListener('submit', previewImportCsv);
+    els.importOnlyNewInput.addEventListener('change', renderImportPreview);
     els.markVerifiedBtn.addEventListener('click', () => openActionDialog('verify'));
     els.removeVerifiedBtn.addEventListener('click', () => openActionDialog('unverify'));
     els.mergeSelectedBtn.addEventListener('click', () => openActionDialog('merge'));
@@ -282,6 +284,8 @@ function openActionDialog(action) {
     pendingAction = action;
     pendingImportRows = [];
     els.mergeFields.hidden = action !== 'merge';
+    els.importOptions.hidden = true;
+    els.confirmActionBtn.disabled = false;
     els.confirmActionBtn.classList.toggle('danger', action === 'delete');
     if (action === 'merge') {
         const type = selected[0].type;
@@ -325,8 +329,13 @@ async function runPendingAction(event) {
             await mergeTaxonomy(selected, els.mergeTargetSelect.value);
             toast('Taxonomy merged');
         } else if (pendingAction === 'import') {
-            await importTaxonomyRows(pendingImportRows);
-            toast(`${pendingImportRows.length} taxonomy item${pendingImportRows.length === 1 ? '' : 's'} imported`);
+            const rowsToImport = importRowsForCurrentMode();
+            if (!rowsToImport.length) {
+                toast('No new taxonomy items to import');
+                return;
+            }
+            await importTaxonomyRows(rowsToImport);
+            toast(`${rowsToImport.length} taxonomy item${rowsToImport.length === 1 ? '' : 's'} imported`);
             await loadData();
         } else {
             const verified = pendingAction === 'verify';
@@ -360,10 +369,6 @@ function exportTaxonomyCsv() {
             item.type || '',
             item.label || '',
             item.parentId || '',
-            item.classId || '',
-            item.subjectId || '',
-            item.chapterId || '',
-            item.topicId || '',
             item.verified ? 'true' : 'false'
         ]);
     });
@@ -394,7 +399,7 @@ async function readCsvFile(event) {
 
 function previewImportCsv(event) {
     event.preventDefault();
-    const csv = els.csvPasteInput.value.trim();
+    const csv = csvPayloadFromText(els.csvPasteInput.value);
     if (!csv) {
         toast('Paste CSV or choose a CSV file');
         return;
@@ -408,11 +413,12 @@ function previewImportCsv(event) {
         }
         pendingAction = 'import';
         els.mergeFields.hidden = true;
+        els.importOptions.hidden = false;
+        els.importOnlyNewInput.checked = false;
         els.confirmActionBtn.classList.remove('danger');
         els.confirmTitle.textContent = 'Import Taxonomy?';
-        els.confirmText.textContent = `This will create or update ${pendingImportRows.length} taxonomy item${pendingImportRows.length === 1 ? '' : 's'} in qb_taxonomy_v1.`;
         els.confirmActionBtn.textContent = 'Import';
-        els.previewList.innerHTML = pendingImportRows.map(item => taxonomyPreview(item)).join('');
+        renderImportPreview();
         els.importDialog.close();
         els.confirmDialog.showModal();
     } catch (error) {
@@ -420,16 +426,39 @@ function previewImportCsv(event) {
     }
 }
 
+function renderImportPreview() {
+    if (pendingAction !== 'import') return;
+    const summary = importSummary(pendingImportRows);
+    const rowsToShow = importRowsForCurrentMode();
+    els.confirmText.textContent = els.importOnlyNewInput.checked
+        ? `This CSV has ${summary.newCount} new and ${summary.existingCount} existing taxonomy item${pendingImportRows.length === 1 ? '' : 's'}. Only the ${rowsToShow.length} new item${rowsToShow.length === 1 ? '' : 's'} will be imported.`
+        : `This CSV has ${summary.newCount} new and ${summary.existingCount} existing taxonomy item${pendingImportRows.length === 1 ? '' : 's'}. Importing all will create new items and update existing ones.`;
+    els.previewList.innerHTML = rowsToShow.length
+        ? rowsToShow.map(item => taxonomyImportPreview(item)).join('')
+        : '<div class="empty-card">No new taxonomy items found in this CSV.</div>';
+    els.confirmActionBtn.disabled = rowsToShow.length === 0;
+}
+
+function importRowsForCurrentMode() {
+    if (!els.importOnlyNewInput.checked) return pendingImportRows;
+    return pendingImportRows.filter(item => !existingTaxonomyItem(item.id));
+}
+
+function importSummary(rows) {
+    return rows.reduce((summary, item) => {
+        if (existingTaxonomyItem(item.id)) {
+            summary.existingCount += 1;
+        } else {
+            summary.newCount += 1;
+        }
+        return summary;
+    }, { newCount: 0, existingCount: 0 });
+}
+
 async function importTaxonomyRows(rows) {
     for (const item of rows) {
         await setDoc(doc(db, COLLECTIONS.taxonomy, item.id), {
-            type: item.type,
-            label: item.label,
-            parentId: item.parentId,
-            classId: item.classId,
-            subjectId: item.subjectId,
-            chapterId: item.chapterId,
-            topicId: item.topicId,
+            ...taxonomyWriteData(item),
             verified: item.verified,
             updatedAt: serverTimestamp(),
             updatedBy: currentUser.email || currentUser.uid
@@ -459,17 +488,20 @@ function taxonomyCsvData(record) {
         type,
         label: String(record.label || record.name || '').trim(),
         parentId: String(record.parentid || '').trim(),
-        classId: String(record.classid || '').trim(),
-        subjectId: String(record.subjectid || '').trim(),
-        chapterId: String(record.chapterid || '').trim(),
-        topicId: String(record.topicid || '').trim(),
         verified: parseBoolean(record.verified, false)
     };
-    if (type === 'class' && !item.classId) item.classId = id;
-    if (type === 'subject' && !item.subjectId) item.subjectId = id;
-    if (type === 'chapter' && !item.chapterId) item.chapterId = id;
-    if (type === 'topic' && !item.topicId) item.topicId = id;
     return item;
+}
+
+function taxonomyWriteData(item) {
+    const data = {
+        type: item.type,
+        label: item.label,
+        parentId: item.parentId
+    };
+    const field = FIELD_BY_TYPE[item.type];
+    if (field) data[field] = item.id;
+    return data;
 }
 
 async function deleteTaxonomy(item) {
@@ -514,6 +546,44 @@ function taxonomyPreview(item) {
             ${refs.length ? `<div class="preview-snippet">${esc(refSummary(refs))}</div>` : ''}
         </article>
     `;
+}
+
+function taxonomyImportPreview(item) {
+    const existing = existingTaxonomyItem(item.id);
+    const refs = existing ? questionRefs(existing) : [];
+    return `
+        <article class="preview-card">
+            <div class="preview-card-head">
+                <strong>${esc(item.label || item.id)}</strong>
+                <span class="status-chip ${existing ? 'neutral' : 'enabled'}">${existing ? 'Existing' : 'New'}</span>
+            </div>
+            <dl>
+                <div><dt>ID</dt><dd><code>${esc(item.id)}</code></dd></div>
+                <div><dt>Type</dt><dd>${importFieldPreview('type', item, existing)}</dd></div>
+                <div><dt>Label</dt><dd>${importFieldPreview('label', item, existing)}</dd></div>
+                <div><dt>Parent</dt><dd>${importFieldPreview('parentId', item, existing, true)}</dd></div>
+                <div><dt>Verified</dt><dd>${importFieldPreview('verified', item, existing)}</dd></div>
+                <div><dt>Question refs</dt><dd>${refs.length}</dd></div>
+            </dl>
+            ${existing && refs.length ? `<div class="preview-snippet">${esc(refSummary(refs))}</div>` : ''}
+        </article>
+    `;
+}
+
+function importFieldPreview(field, incoming, existing, code = false) {
+    const incomingValue = field === 'verified' ? String(Boolean(incoming[field])) : String(incoming[field] || '');
+    if (!existing) return code ? `<code>${esc(incomingValue)}</code>` : esc(incomingValue);
+    const existingValue = field === 'verified' ? String(Boolean(existing[field])) : String(existing[field] || '');
+    const incomingHtml = code ? `<code>${esc(incomingValue)}</code>` : esc(incomingValue);
+    if (incomingValue === existingValue) return incomingHtml;
+    const existingHtml = existingValue
+        ? (code ? `<code>${esc(existingValue)}</code>` : esc(existingValue))
+        : '(empty)';
+    return `<span class="field-change"><span>${incomingHtml}</span><small>Existing: ${existingHtml}</small></span>`;
+}
+
+function existingTaxonomyItem(id) {
+    return taxonomy.find(item => item.id === id);
 }
 
 function refSummary(refs) {
@@ -573,6 +643,12 @@ function parseCsv(text) {
     row.push(value);
     if (row.length > 1 || row[0]) rows.push(row);
     return rows;
+}
+
+function csvPayloadFromText(text) {
+    const raw = String(text || '').trim();
+    const csvBlock = raw.match(/```csv\s*([\s\S]*?)```/i) || raw.match(/```\s*([\s\S]*?)```/);
+    return (csvBlock ? csvBlock[1] : raw).trim();
 }
 
 function toCsv(rows) {

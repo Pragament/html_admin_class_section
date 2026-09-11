@@ -284,6 +284,11 @@ a.btn,
     background: #fff1ef;
 }
 
+.status-chip.neutral {
+    color: #40566d;
+    background: #edf4fa;
+}
+
 .table-wrap {
     overflow-x: auto;
     margin-top: 14px;
@@ -334,6 +339,19 @@ a.btn,
 .section-table code {
     color: var(--muted);
     font-size: 12px;
+}
+
+.section-table .table-link {
+    color: var(--primary);
+    text-decoration: none;
+}
+
+.section-table .table-link code {
+    color: inherit;
+}
+
+.section-table .table-link:hover {
+    text-decoration: underline;
 }
 
 .section-table input[type="checkbox"] {
@@ -499,6 +517,13 @@ a.btn,
     padding: 12px;
 }
 
+.preview-card-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+}
+
 .preview-card dl {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -521,6 +546,17 @@ a.btn,
     margin: 2px 0 0;
     overflow-wrap: anywhere;
     font-size: 13px;
+}
+
+.field-change {
+    display: grid;
+    gap: 3px;
+}
+
+.field-change small {
+    color: var(--muted);
+    font-size: 11px;
+    font-weight: 800;
 }
 
 .preview-snippet {

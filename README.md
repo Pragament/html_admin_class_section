@@ -58,7 +58,7 @@ The taxonomy page reads `qb_taxonomy_v1` and `qb_questions_v1`, supports bulk se
 Taxonomy CSV columns:
 
 ```txt
-id,type,label,parentId,classId,subjectId,chapterId,topicId,verified
+id,type,label,parentId,verified
 ```
 
 ## Admin Access

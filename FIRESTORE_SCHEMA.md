@@ -214,7 +214,7 @@ Admin-relevant fields:
 Admin moderation:
 
 - Taxonomy can be filtered by search, type, and verified state.
-- Taxonomy CSV export/import uses `id,type,label,parentId,classId,subjectId,chapterId,topicId,verified`.
+- Taxonomy CSV export/import uses `id,type,label,parentId,verified`. The taxonomy `type` determines whether the single `id` maps to `classId`, `subjectId`, `chapterId`, or `topicId` internally.
 - Taxonomy CSV import accepts pasted CSV or a CSV file, shows a detailed preview, then upserts with merge.
 - Bulk verified actions set `verified` to `true` or `false`.
 - Bulk delete hard deletes selected taxonomy documents after a detailed confirmation preview.

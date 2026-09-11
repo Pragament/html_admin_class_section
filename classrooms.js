@@ -80,6 +80,7 @@ const els = {
 };
 
 bindEvents();
+prefillSearchFromUrl();
 
 onAuthStateChanged(auth, async (user) => {
     currentUser = user;
@@ -119,6 +120,12 @@ function bindEvents() {
     els.classroomTableWrap.addEventListener('change', handleTableSelection);
     els.cancelDeleteBtn.addEventListener('click', () => els.confirmDialog.close());
     els.confirmForm.addEventListener('submit', deleteSelectedClassrooms);
+}
+
+function prefillSearchFromUrl() {
+    const params = new URLSearchParams(window.location.search);
+    const search = params.get('classroomId') || params.get('search') || '';
+    els.searchInput.value = search.trim();
 }
 
 async function login() {
@@ -174,7 +181,7 @@ function renderClassrooms() {
                         <td><strong>${esc(classroom.classCode || '')}</strong></td>
                         <td><strong>${esc(classroomLabel(classroom))}</strong></td>
                         <td>${esc(classroom.sectionName || '')}</td>
-                        <td><code>${esc(classroom.questionBankListId || '')}</code></td>
+                        <td>${renderQuestionListLink(classroom.questionBankListId)}</td>
                         <td><span class="status-chip ${classroom.classEnabled === false ? 'disabled' : 'enabled'}">${classroom.classEnabled === false ? 'Disabled' : 'Enabled'}</span></td>
                         <td><code>${esc(creatorEmail(classroom))}</code></td>
                         <td>${esc(formatDate(createdMillis(classroom)))}</td>
@@ -331,6 +338,13 @@ function classroomLabel(classroom) {
 
 function creatorEmail(classroom) {
     return classroom.createdBy || classroom.creatorEmail || classroom.email || '';
+}
+
+function renderQuestionListLink(listId) {
+    const id = String(listId || '').trim();
+    if (!id) return '';
+    const href = `https://question-bank.technikh.com/list-detail.html?id=${encodeURIComponent(id)}`;
+    return `<a class="table-link" href="${href}" target="_blank" rel="noopener noreferrer"><code>${esc(id)}</code></a>`;
 }
 
 function createdMillis(classroom) {

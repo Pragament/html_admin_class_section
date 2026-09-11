@@ -89,6 +89,12 @@
                 <h2 id="confirmTitle">Confirm</h2>
                 <p id="confirmText"></p>
             </div>
+            <div id="importOptions" class="merge-fields" hidden>
+                <label class="toggle-field">
+                    <input id="importOnlyNewInput" type="checkbox" />
+                    <span>Only import new taxonomy items</span>
+                </label>
+            </div>
             <div id="previewList" class="preview-list"></div>
             <div id="mergeFields" class="merge-fields" hidden>
                 <label class="field">
@@ -121,7 +127,7 @@
             </div>
             <label class="field">
                 <span>CSV</span>
-                <textarea id="csvPasteInput" rows="12" placeholder="id,type,label,parentId,classId,subjectId,chapterId,topicId,verified"></textarea>
+                <textarea id="csvPasteInput" rows="12" placeholder="id,type,label,parentId,verified"></textarea>
             </label>
             <div class="form-actions">
                 <button class="btn primary" type="submit">Preview Import</button>
