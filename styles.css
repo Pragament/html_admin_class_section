@@ -307,6 +307,10 @@ a.btn,
     min-width: 680px;
 }
 
+.classroom-table {
+    min-width: 1220px;
+}
+
 .submissions-table {
     min-width: 1180px;
 }

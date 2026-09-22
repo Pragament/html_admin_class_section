@@ -39,6 +39,8 @@ const CSV_COLUMNS = [
     'sectionId',
     'sectionName',
     'questionBankListId',
+    'randomQuestionTypeCounts',
+    'studentDifficultyLevels',
     'classEnabled',
     'createdBy',
     'creatorId',
@@ -160,7 +162,7 @@ function renderClassrooms() {
     els.classroomCount.textContent = String(visible.length);
     updateSelectionState();
     els.classroomTableWrap.innerHTML = visible.length ? `
-        <table class="section-table">
+        <table class="section-table classroom-table">
             <thead>
                 <tr>
                     <th scope="col"><input type="checkbox" data-select-all ${visible.every(classroom => selectedClassroomIds.has(classroom.id)) ? 'checked' : ''} /></th>
@@ -168,6 +170,8 @@ function renderClassrooms() {
                     <th scope="col">Classroom</th>
                     <th scope="col">Section</th>
                     <th scope="col">Question List</th>
+                    <th scope="col">Random Counts</th>
+                    <th scope="col">Difficulty Levels</th>
                     <th scope="col">Status</th>
                     <th scope="col">Creator Email</th>
                     <th scope="col">Created</th>
@@ -182,6 +186,8 @@ function renderClassrooms() {
                         <td><strong>${esc(classroomLabel(classroom))}</strong></td>
                         <td>${esc(classroom.sectionName || '')}</td>
                         <td>${renderQuestionListLink(classroom.questionBankListId)}</td>
+                        <td>${renderSummaryCode(randomCountsLabel(classroom.randomQuestionTypeCounts))}</td>
+                        <td>${renderSummaryCode(difficultyLevelsLabel(classroom.studentDifficultyLevels))}</td>
                         <td><span class="status-chip ${classroom.classEnabled === false ? 'disabled' : 'enabled'}">${classroom.classEnabled === false ? 'Disabled' : 'Enabled'}</span></td>
                         <td><code>${esc(creatorEmail(classroom))}</code></td>
                         <td>${esc(formatDate(createdMillis(classroom)))}</td>
@@ -295,6 +301,8 @@ function filteredClassrooms() {
             classroom.sectionId,
             classroom.sectionName,
             classroom.questionBankListId,
+            randomCountsLabel(classroom.randomQuestionTypeCounts),
+            difficultyLevelsLabel(classroom.studentDifficultyLevels),
             classroom.createdBy,
             classroom.creatorEmail,
             classroom.email,
@@ -315,6 +323,8 @@ function exportClassroomsCsv() {
             classroom.sectionId || '',
             classroom.sectionName || '',
             classroom.questionBankListId || '',
+            randomCountsLabel(classroom.randomQuestionTypeCounts),
+            difficultyLevelsLabel(classroom.studentDifficultyLevels),
             classroom.classEnabled === false ? 'false' : 'true',
             creatorEmail(classroom),
             classroom.creatorId || '',
@@ -345,6 +355,30 @@ function renderQuestionListLink(listId) {
     if (!id) return '';
     const href = `https://question-bank.technikh.com/list-detail.html?id=${encodeURIComponent(id)}`;
     return `<a class="table-link" href="${href}" target="_blank" rel="noopener noreferrer"><code>${esc(id)}</code></a>`;
+}
+
+function renderSummaryCode(value) {
+    const text = String(value || '').trim();
+    return text ? `<code>${esc(text)}</code>` : '';
+}
+
+function randomCountsLabel(counts) {
+    const entries = sortedObjectEntries(counts)
+        .filter(([, value]) => Number.isFinite(Number(value)) && Number(value) > 0);
+    if (!entries.length) return 'All';
+    return entries.map(([key, value]) => `${key}: ${Number(value)}`).join(', ');
+}
+
+function difficultyLevelsLabel(levels) {
+    const entries = sortedObjectEntries(levels)
+        .filter(([, value]) => String(value || '').trim());
+    return entries.map(([key, value]) => `${key}: ${value}`).join(', ');
+}
+
+function sortedObjectEntries(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return [];
+    return Object.entries(value)
+        .sort(([keyA], [keyB]) => keyA.localeCompare(keyB, undefined, { numeric: true, sensitivity: 'base' }));
 }
 
 function createdMillis(classroom) {

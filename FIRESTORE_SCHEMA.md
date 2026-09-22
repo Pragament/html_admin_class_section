@@ -46,6 +46,20 @@ Document shape:
   sectionId: 'QQAP9O4UyvlaYhqz7jdE',
   sectionName: 'DSS grade 8',
   questionBankListId: 'qb_lists_v1 document id',
+  randomQuestionTypeCounts: {
+    mcq: 10,
+    fib: 5,
+    short_answer: 3,
+    true_false: 2
+  },
+  studentDifficultyLevels: {
+    '102': 'Easy',
+    '103': 'Hard'
+  },
+  studentDifficultyUpdatedAt: Timestamp,
+  archived: false,
+  archivedAt: Timestamp,
+  archivedBy: 'firebase-auth-uid',
   updatedAt: Timestamp
 }
 ```
@@ -60,6 +74,13 @@ Important fields:
 - `sectionId` - used as a submission lookup fallback for all students in the classroom section.
 - `sectionName` - shown in the dashboard.
 - `questionBankListId` - optional reference to a private question list selected by the teacher.
+- `randomQuestionTypeCounts` - optional per-type limits for randomly picking questions from the selected question list. Missing or empty means use all questions.
+- `studentDifficultyLevels` - optional admission-number keyed difficulty overrides. Missing student entries use the quiz session default question selection.
+- `studentDifficultyUpdatedAt` - optional timestamp for the last student difficulty override update.
+- `archived` - optional soft archive flag. Teachers can archive and unarchive quiz sessions they created.
+- `archivedAt` - optional timestamp for when the quiz session was archived or unarchived.
+- `archivedBy` - optional Firebase Auth UID for the user who last changed the archive state.
+- `updatedAt` - optional timestamp for the last classroom update.
 
 Admin deletion behavior:
 

@@ -38,10 +38,10 @@ Student imports are scoped to the section currently open in the admin UI. Rows w
 ## Classroom CSV Columns
 
 ```txt
-id,classCode,className,sectionId,sectionName,questionBankListId,classEnabled,createdBy,creatorId,createdAt,createdDate
+id,classCode,className,sectionId,sectionName,questionBankListId,randomQuestionTypeCounts,studentDifficultyLevels,classEnabled,createdBy,creatorId,createdAt,createdDate
 ```
 
-The classroom page reads all documents from `/classrooms`, shows creator email and created time, and sorts newest classrooms first.
+The classroom page reads all documents from `/classrooms`, shows creator email, created time, question randomization counts, and student difficulty overrides, and sorts newest classrooms first.
 
 ## Submissions Admin
 
