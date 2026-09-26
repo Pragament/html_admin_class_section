@@ -65,6 +65,9 @@ let taxonomy = [];
 let selectedTaxonomyIds = new Set();
 let pendingAction = null;
 let pendingImportRows = [];
+let mergeMappings = new Map();
+let activeMergeSourceId = '';
+let mergeType = '';
 let toastTimer = null;
 
 const $ = (id) => document.getElementById(id);
@@ -95,7 +98,16 @@ const els = {
     confirmText: $('confirmText'),
     previewList: $('previewList'),
     mergeFields: $('mergeFields'),
-    mergeTargetSelect: $('mergeTargetSelect'),
+    mergeSourceIncludeInput: $('mergeSourceIncludeInput'),
+    mergeSourceExcludeInput: $('mergeSourceExcludeInput'),
+    mergeSourceVerifiedFilter: $('mergeSourceVerifiedFilter'),
+    mergeSourceCount: $('mergeSourceCount'),
+    mergeSourceList: $('mergeSourceList'),
+    mergeTargetIncludeInput: $('mergeTargetIncludeInput'),
+    mergeTargetExcludeInput: $('mergeTargetExcludeInput'),
+    mergeTargetVerifiedFilter: $('mergeTargetVerifiedFilter'),
+    mergeTargetCount: $('mergeTargetCount'),
+    mergeTargetList: $('mergeTargetList'),
     importOptions: $('importOptions'),
     importOnlyNewInput: $('importOnlyNewInput'),
     cancelActionBtn: $('cancelActionBtn'),
@@ -161,6 +173,19 @@ function bindEvents() {
         el.addEventListener('change', renderTaxonomy);
     });
     els.taxonomyTableWrap.addEventListener('change', handleTableSelection);
+    [
+        els.mergeSourceIncludeInput,
+        els.mergeSourceExcludeInput,
+        els.mergeSourceVerifiedFilter,
+        els.mergeTargetIncludeInput,
+        els.mergeTargetExcludeInput,
+        els.mergeTargetVerifiedFilter
+    ].forEach(el => {
+        el.addEventListener('input', renderMergeMapping);
+        el.addEventListener('change', renderMergeMapping);
+    });
+    els.mergeSourceList.addEventListener('click', handleMergeSourceClick);
+    els.mergeTargetList.addEventListener('click', handleMergeTargetClick);
     els.cancelActionBtn.addEventListener('click', () => els.confirmDialog.close());
     els.confirmForm.addEventListener('submit', runPendingAction);
 }
@@ -283,6 +308,9 @@ function openActionDialog(action) {
     if (!selected.length) return;
     pendingAction = action;
     pendingImportRows = [];
+    mergeMappings = new Map();
+    activeMergeSourceId = '';
+    mergeType = '';
     els.mergeFields.hidden = action !== 'merge';
     els.importOptions.hidden = true;
     els.confirmActionBtn.disabled = false;
@@ -296,9 +324,9 @@ function openActionDialog(action) {
             pendingAction = null;
             return;
         }
-        els.mergeTargetSelect.innerHTML = candidates.map(item => `
-            <option value="${esc(item.id)}">${esc(item.label || item.id)} (${esc(item.id)})</option>
-        `).join('');
+        mergeType = type;
+        activeMergeSourceId = selected[0].id;
+        resetMergeFilters();
     }
 
     const actionLabels = {
@@ -311,8 +339,172 @@ function openActionDialog(action) {
     els.confirmTitle.textContent = title;
     els.confirmText.textContent = text;
     els.confirmActionBtn.textContent = button;
-    els.previewList.innerHTML = selected.map(item => taxonomyPreview(item)).join('');
+    els.previewList.innerHTML = action === 'merge' ? '' : selected.map(item => taxonomyPreview(item)).join('');
+    if (action === 'merge') renderMergeMapping();
     els.confirmDialog.showModal();
+}
+
+function resetMergeFilters() {
+    els.mergeSourceIncludeInput.value = '';
+    els.mergeSourceExcludeInput.value = '';
+    els.mergeSourceVerifiedFilter.value = 'all';
+    els.mergeTargetIncludeInput.value = '';
+    els.mergeTargetExcludeInput.value = '';
+    els.mergeTargetVerifiedFilter.value = 'all';
+}
+
+function renderMergeMapping() {
+    if (pendingAction !== 'merge') return;
+    const selected = selectedTaxonomy();
+    const sourceItems = filterMergeItems(
+        selected,
+        els.mergeSourceIncludeInput.value,
+        els.mergeSourceExcludeInput.value,
+        els.mergeSourceVerifiedFilter.value
+    );
+    const targetItems = filterMergeItems(
+        taxonomy.filter(item => item.type === mergeType),
+        els.mergeTargetIncludeInput.value,
+        els.mergeTargetExcludeInput.value,
+        els.mergeTargetVerifiedFilter.value
+    );
+    const targetIds = new Set([...mergeMappings.values()]);
+
+    els.mergeSourceCount.textContent = `${sourceItems.length}/${selected.length}`;
+    els.mergeTargetCount.textContent = String(targetItems.length);
+    els.mergeSourceList.innerHTML = sourceItems.length
+        ? sourceItems.map(item => mergeSourceRow(item, targetIds)).join('')
+        : '<div class="empty-card">No selected sources match these filters.</div>';
+    els.mergeTargetList.innerHTML = targetItems.length
+        ? targetItems.map(item => mergeTargetRow(item)).join('')
+        : '<div class="empty-card">No targets match these filters.</div>';
+
+    els.confirmActionBtn.disabled = !mergeMappingIsReady(selected);
+}
+
+function filterMergeItems(items, includeValue, excludeValue, verified) {
+    const include = String(includeValue || '').trim().toLowerCase();
+    const exclude = String(excludeValue || '').trim().toLowerCase();
+    return items.filter(item => {
+        if (verified === 'verified' && !item.verified) return false;
+        if (verified === 'unverified' && item.verified) return false;
+        if (include && !taxonomyMatchesSearch(item, include)) return false;
+        if (exclude && taxonomyMatchesSearch(item, exclude)) return false;
+        return true;
+    });
+}
+
+function taxonomyMatchesSearch(item, search) {
+    return [
+        item.id,
+        item.label,
+        item.type,
+        item.parentId,
+        item.classId,
+        item.subjectId,
+        item.chapterId,
+        item.topicId
+    ].some(value => String(value || '').toLowerCase().includes(search));
+}
+
+function mergeSourceRow(item, targetIds) {
+    const targetId = mergeMappings.get(item.id) || '';
+    const target = targetId ? taxonomy.find(current => current.id === targetId) : null;
+    const keptAsTarget = targetIds.has(item.id) && !targetId;
+    const active = item.id === activeMergeSourceId;
+    const mappedText = target
+        ? `to ${target.label || target.id}`
+        : (keptAsTarget ? 'Kept as target' : 'Choose target');
+    return `
+        <button class="merge-row ${active ? 'active' : ''} ${target || keptAsTarget ? 'mapped' : ''}" type="button" data-merge-source="${esc(item.id)}">
+            <span>
+                <strong>${esc(item.label || item.id)}</strong>
+                <code>${esc(item.id)}</code>
+            </span>
+            <small>${esc(mappedText)}</small>
+        </button>
+    `;
+}
+
+function mergeTargetRow(item) {
+    const activeSource = taxonomy.find(current => current.id === activeMergeSourceId);
+    const disabled = activeSource && activeSource.type !== item.type;
+    const mappedFrom = [...mergeMappings.entries()]
+        .filter(([sourceId, targetId]) => targetId === item.id && sourceId !== item.id)
+        .map(([sourceId]) => taxonomy.find(current => current.id === sourceId)?.label || sourceId);
+    return `
+        <button class="merge-row ${disabled ? 'disabled' : ''}" type="button" data-merge-target="${esc(item.id)}" ${disabled ? 'disabled' : ''}>
+            <span>
+                <strong>${esc(item.label || item.id)}</strong>
+                <code>${esc(item.id)}</code>
+            </span>
+            <small>${item.verified ? 'Verified' : 'Unverified'}${mappedFrom.length ? ` | ${esc(mappedFrom.length)} mapped` : ''}</small>
+        </button>
+    `;
+}
+
+function handleMergeSourceClick(event) {
+    const row = event.target.closest('[data-merge-source]');
+    if (!row) return;
+    activeMergeSourceId = row.dataset.mergeSource;
+    renderMergeMapping();
+}
+
+function handleMergeTargetClick(event) {
+    const row = event.target.closest('[data-merge-target]');
+    if (!row || !activeMergeSourceId) return;
+    const source = taxonomy.find(item => item.id === activeMergeSourceId);
+    const target = taxonomy.find(item => item.id === row.dataset.mergeTarget);
+    if (!source || !target) return;
+    if (source.type !== target.type) {
+        toast('Source and target must use the same taxonomy type');
+        return;
+    }
+    mergeMappings.set(source.id, target.id);
+    activeMergeSourceId = nextUnresolvedMergeSourceId(source.id);
+    renderMergeMapping();
+}
+
+function nextUnresolvedMergeSourceId(fallbackId = '') {
+    const selected = selectedTaxonomy();
+    const targetIds = new Set([...mergeMappings.entries()]
+        .filter(([sourceId, targetId]) => sourceId !== targetId)
+        .map(([, targetId]) => targetId));
+    const next = selected.find(item => !mergeMappings.has(item.id) && !targetIds.has(item.id));
+    return next?.id || fallbackId;
+}
+
+function mergeMappingIsReady(selected) {
+    try {
+        mergeMappingsForSubmit(selected);
+        return true;
+    } catch {
+        return false;
+    }
+}
+
+function mergeMappingsForSubmit(selected) {
+    const selectedIds = new Set(selected.map(item => item.id));
+    const targetIds = new Set([...mergeMappings.entries()]
+        .filter(([sourceId, targetId]) => sourceId !== targetId)
+        .map(([, targetId]) => targetId));
+    const unresolved = selected.filter(item => !mergeMappings.has(item.id) && !targetIds.has(item.id));
+    if (unresolved.length) {
+        throw new Error(`Choose targets for ${unresolved.length} selected source${unresolved.length === 1 ? '' : 's'}`);
+    }
+
+    const mappings = [...mergeMappings.entries()]
+        .filter(([sourceId, targetId]) => sourceId !== targetId)
+        .map(([sourceId, targetId]) => {
+            const source = taxonomy.find(item => item.id === sourceId);
+            const target = taxonomy.find(item => item.id === targetId);
+            if (!source || !target) throw new Error('Merge mapping includes a missing taxonomy item');
+            if (!selectedIds.has(source.id)) throw new Error('Merge source must be selected');
+            if (source.type !== target.type) throw new Error('Source and target must use the same taxonomy type');
+            return { source, target };
+        });
+    if (!mappings.length) throw new Error('Map at least one source to a different target');
+    return mappings;
 }
 
 async function runPendingAction(event) {
@@ -326,7 +518,8 @@ async function runPendingAction(event) {
             for (const item of selected) await deleteTaxonomy(item);
             toast('Selected taxonomy deleted');
         } else if (pendingAction === 'merge') {
-            await mergeTaxonomy(selected, els.mergeTargetSelect.value);
+            const mappings = mergeMappingsForSubmit(selected);
+            await mergeTaxonomyMappings(mappings);
             toast('Taxonomy merged');
         } else if (pendingAction === 'import') {
             const rowsToImport = importRowsForCurrentMode();
@@ -509,13 +702,8 @@ async function deleteTaxonomy(item) {
     taxonomy = taxonomy.filter(current => current.id !== item.id);
 }
 
-async function mergeTaxonomy(selected, targetId) {
-    const target = taxonomy.find(item => item.id === targetId);
-    if (!target) throw new Error('Choose a merge target');
-    const sources = selected.filter(item => item.id !== target.id);
-    if (!sources.length) throw new Error('Select at least one old taxonomy item in addition to the target');
-    for (const oldItem of sources) {
-        if (oldItem.type !== target.type) throw new Error('Merge target must use the same taxonomy type');
+async function mergeTaxonomyMappings(mappings) {
+    for (const { source: oldItem, target } of mappings) {
         const field = FIELD_BY_TYPE[oldItem.type];
         if (!field) throw new Error('Unsupported taxonomy type');
         const refs = questionRefs(oldItem);
