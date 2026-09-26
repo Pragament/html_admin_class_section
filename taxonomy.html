@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>School Admin - Taxonomy</title>
-    <link rel="stylesheet" href="styles.css" />
+    <link rel="stylesheet" href="styles.css?v=20260926.1" />
 </head>
 <body>
     <header class="topbar" id="topbar" hidden>
@@ -97,10 +97,50 @@
             </div>
             <div id="previewList" class="preview-list"></div>
             <div id="mergeFields" class="merge-fields" hidden>
-                <label class="field">
-                    <span>Merge Into</span>
-                    <select id="mergeTargetSelect"></select>
-                </label>
+                <div class="merge-grid">
+                    <section class="merge-column">
+                        <div class="merge-column-head">
+                            <strong>Source IDs</strong>
+                            <span class="count-chip" id="mergeSourceCount">0</span>
+                        </div>
+                        <div class="merge-filter-row">
+                            <label class="field">
+                                <span>Search source</span>
+                                <input id="mergeSourceSearchInput" type="search" placeholder="Label, id, parent" />
+                            </label>
+                            <label class="field mini-field">
+                                <span>Verified</span>
+                                <select id="mergeSourceVerifiedFilter">
+                                    <option value="all">All</option>
+                                    <option value="verified">Verified</option>
+                                    <option value="unverified">Unverified</option>
+                                </select>
+                            </label>
+                        </div>
+                        <div id="mergeSourceList" class="merge-list"></div>
+                    </section>
+                    <section class="merge-column">
+                        <div class="merge-column-head">
+                            <strong>Target IDs</strong>
+                            <span class="count-chip" id="mergeTargetCount">0</span>
+                        </div>
+                        <div class="merge-filter-row">
+                            <label class="field">
+                                <span>Search target</span>
+                                <input id="mergeTargetSearchInput" type="search" placeholder="Label, id, parent" />
+                            </label>
+                            <label class="field mini-field">
+                                <span>Verified</span>
+                                <select id="mergeTargetVerifiedFilter">
+                                    <option value="all">All</option>
+                                    <option value="verified">Verified</option>
+                                    <option value="unverified">Unverified</option>
+                                </select>
+                            </label>
+                        </div>
+                        <div id="mergeTargetList" class="merge-list"></div>
+                    </section>
+                </div>
             </div>
             <div class="form-actions">
                 <button class="btn" id="cancelActionBtn" type="button">Cancel</button>
@@ -136,6 +176,6 @@
     </dialog>
 
     <div id="toast" class="toast"></div>
-    <script type="module" src="taxonomy.js"></script>
+    <script type="module" src="taxonomy.js?v=20260926.1"></script>
 </body>
 </html>

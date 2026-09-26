@@ -31,6 +31,23 @@ body {
     letter-spacing: 0;
 }
 
+body::before {
+    content: "v2026.09.26.1";
+    position: fixed;
+    top: 6px;
+    left: 6px;
+    z-index: 1000;
+    border: 1px solid rgba(255, 255, 255, 0.28);
+    border-radius: 7px;
+    background: rgba(16, 34, 53, 0.86);
+    color: #fff;
+    padding: 4px 7px;
+    font-size: 11px;
+    font-weight: 800;
+    line-height: 1;
+    pointer-events: none;
+}
+
 button,
 input,
 select,
@@ -480,7 +497,7 @@ a.btn,
 }
 
 .preview-modal {
-    width: min(860px, calc(100vw - 24px));
+    width: min(1080px, calc(100vw - 24px));
 }
 
 .modal::backdrop {
@@ -578,6 +595,100 @@ a.btn,
     padding: 12px;
 }
 
+.merge-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+}
+
+.merge-column {
+    display: grid;
+    min-width: 0;
+    gap: 10px;
+}
+
+.merge-column-head,
+.merge-filter-row {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.merge-column-head {
+    align-items: center;
+}
+
+.merge-filter-row .field:first-child {
+    flex: 1;
+    min-width: 0;
+}
+
+.merge-list {
+    display: grid;
+    gap: 8px;
+    max-height: min(42vh, 420px);
+    overflow: auto;
+}
+
+.merge-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 4px;
+    width: 100%;
+    min-height: 64px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: #fff;
+    color: var(--text);
+    padding: 9px 10px;
+    text-align: left;
+}
+
+.merge-row:hover {
+    border-color: var(--line-strong);
+    background: #f8fbfd;
+}
+
+.merge-row.active {
+    border-color: var(--primary);
+    box-shadow: inset 3px 0 0 var(--primary);
+}
+
+.merge-row.mapped {
+    background: #f2fbf6;
+}
+
+.merge-row.disabled {
+    cursor: not-allowed;
+    opacity: 0.58;
+}
+
+.merge-row span {
+    display: grid;
+    min-width: 0;
+    gap: 3px;
+}
+
+.merge-row strong,
+.merge-row code,
+.merge-row small {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.merge-row code {
+    color: var(--muted);
+    font-size: 12px;
+}
+
+.merge-row small {
+    color: var(--muted);
+    font-size: 12px;
+    font-weight: 800;
+}
+
 .mini-field {
     width: min(120px, 100%);
 }
@@ -673,6 +784,15 @@ a.btn,
 
     .form-grid {
         grid-template-columns: 1fr;
+    }
+
+    .merge-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .merge-filter-row {
+        align-items: stretch;
+        flex-direction: column;
     }
 
     .login-panel,
