@@ -53,7 +53,7 @@ The questions page reads `qb_questions_v1` and `qb_reactions_v1`, computes like/
 
 ## Taxonomy Moderation
 
-The taxonomy page reads `qb_taxonomy_v1` and `qb_questions_v1`, supports bulk setting or removing `verified`, CSV export, CSV paste/file import with preview, previewed deletes, and merging selected taxonomy items into a compatible target. Merge updates matching question reference fields before deleting the old taxonomy documents.
+The taxonomy page reads `qb_taxonomy_v1` and `qb_questions_v1`, supports bulk setting or removing `verified`, CSV export, CSV paste/file import with preview, previewed deletes, and two-column taxonomy merge mapping. Merge maps selected source IDs to compatible target IDs, updates matching question reference fields, and deletes only the old source taxonomy documents.
 
 Taxonomy CSV columns:
 
