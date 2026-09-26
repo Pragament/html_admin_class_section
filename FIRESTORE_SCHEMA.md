@@ -239,7 +239,7 @@ Admin moderation:
 - Taxonomy CSV import accepts pasted CSV or a CSV file, shows a detailed preview, then upserts with merge.
 - Bulk verified actions set `verified` to `true` or `false`.
 - Bulk delete hard deletes selected taxonomy documents after a detailed confirmation preview.
-- Merge supports two-column mapping from selected source taxonomy rows to target taxonomy rows. The source and target columns have separate search and verified-state filters.
+- Merge supports two-column mapping from selected source taxonomy rows to target taxonomy rows. The source and target columns have separate include search, exclude search, and verified-state filters.
 - Each merge mapping requires the source and target taxonomy items to have the same `type`. A selected target row is kept when another selected source maps into it.
 - Merge rewrites questions that reference each old source taxonomy ID, then deletes the old source taxonomy document.
 - The question field updated during merge is based on taxonomy `type`: `classId`, `subjectId`, `chapterId`, or `topicId`.
