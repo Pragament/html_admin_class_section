@@ -619,7 +619,7 @@ a.btn,
     align-items: center;
 }
 
-.merge-filter-row .field:first-child {
+.merge-filter-row .field:not(.mini-field) {
     flex: 1;
     min-width: 0;
 }

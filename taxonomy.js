@@ -98,11 +98,13 @@ const els = {
     confirmText: $('confirmText'),
     previewList: $('previewList'),
     mergeFields: $('mergeFields'),
-    mergeSourceSearchInput: $('mergeSourceSearchInput'),
+    mergeSourceIncludeInput: $('mergeSourceIncludeInput'),
+    mergeSourceExcludeInput: $('mergeSourceExcludeInput'),
     mergeSourceVerifiedFilter: $('mergeSourceVerifiedFilter'),
     mergeSourceCount: $('mergeSourceCount'),
     mergeSourceList: $('mergeSourceList'),
-    mergeTargetSearchInput: $('mergeTargetSearchInput'),
+    mergeTargetIncludeInput: $('mergeTargetIncludeInput'),
+    mergeTargetExcludeInput: $('mergeTargetExcludeInput'),
     mergeTargetVerifiedFilter: $('mergeTargetVerifiedFilter'),
     mergeTargetCount: $('mergeTargetCount'),
     mergeTargetList: $('mergeTargetList'),
@@ -172,9 +174,11 @@ function bindEvents() {
     });
     els.taxonomyTableWrap.addEventListener('change', handleTableSelection);
     [
-        els.mergeSourceSearchInput,
+        els.mergeSourceIncludeInput,
+        els.mergeSourceExcludeInput,
         els.mergeSourceVerifiedFilter,
-        els.mergeTargetSearchInput,
+        els.mergeTargetIncludeInput,
+        els.mergeTargetExcludeInput,
         els.mergeTargetVerifiedFilter
     ].forEach(el => {
         el.addEventListener('input', renderMergeMapping);
@@ -341,9 +345,11 @@ function openActionDialog(action) {
 }
 
 function resetMergeFilters() {
-    els.mergeSourceSearchInput.value = '';
+    els.mergeSourceIncludeInput.value = '';
+    els.mergeSourceExcludeInput.value = '';
     els.mergeSourceVerifiedFilter.value = 'all';
-    els.mergeTargetSearchInput.value = '';
+    els.mergeTargetIncludeInput.value = '';
+    els.mergeTargetExcludeInput.value = '';
     els.mergeTargetVerifiedFilter.value = 'all';
 }
 
@@ -352,12 +358,14 @@ function renderMergeMapping() {
     const selected = selectedTaxonomy();
     const sourceItems = filterMergeItems(
         selected,
-        els.mergeSourceSearchInput.value,
+        els.mergeSourceIncludeInput.value,
+        els.mergeSourceExcludeInput.value,
         els.mergeSourceVerifiedFilter.value
     );
     const targetItems = filterMergeItems(
         taxonomy.filter(item => item.type === mergeType),
-        els.mergeTargetSearchInput.value,
+        els.mergeTargetIncludeInput.value,
+        els.mergeTargetExcludeInput.value,
         els.mergeTargetVerifiedFilter.value
     );
     const targetIds = new Set([...mergeMappings.values()]);
@@ -374,13 +382,15 @@ function renderMergeMapping() {
     els.confirmActionBtn.disabled = !mergeMappingIsReady(selected);
 }
 
-function filterMergeItems(items, searchValue, verified) {
-    const search = String(searchValue || '').trim().toLowerCase();
+function filterMergeItems(items, includeValue, excludeValue, verified) {
+    const include = String(includeValue || '').trim().toLowerCase();
+    const exclude = String(excludeValue || '').trim().toLowerCase();
     return items.filter(item => {
         if (verified === 'verified' && !item.verified) return false;
         if (verified === 'unverified' && item.verified) return false;
-        if (!search) return true;
-        return taxonomyMatchesSearch(item, search);
+        if (include && !taxonomyMatchesSearch(item, include)) return false;
+        if (exclude && taxonomyMatchesSearch(item, exclude)) return false;
+        return true;
     });
 }
 
