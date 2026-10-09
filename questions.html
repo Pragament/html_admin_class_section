@@ -62,6 +62,16 @@
                         </select>
                     </label>
                     <label class="field compact-field">
+                        <span>Type</span>
+                        <select id="typeFilter">
+                            <option value="all">All</option>
+                            <option value="mcq">MCQ</option>
+                            <option value="short_answer">Short Answer</option>
+                            <option value="fib">Fill in the Blank</option>
+                            <option value="true_false">True / False</option>
+                        </select>
+                    </label>
+                    <label class="field compact-field">
                         <span>Verified</span>
                         <select id="verifiedFilter">
                             <option value="all">All</option>
@@ -102,6 +112,6 @@
     </dialog>
 
     <div id="toast" class="toast"></div>
-    <script type="module" src="questions.js?v=20260926.1"></script>
+    <script type="module" src="questions.js?v=20261009.2"></script>
 </body>
 </html>

@@ -55,7 +55,8 @@ const els = {
     deleteSelectedBtn: $('deleteSelectedBtn'),
     searchInput: $('searchInput'),
     statusFilter: $('statusFilter'),
-    dateFilter: $('dateFilter'),
+    startDateFilter: $('startDateFilter'),
+    endDateFilter: $('endDateFilter'),
     submissionCount: $('submissionCount'),
     selectedCount: $('selectedCount'),
     submissionTableWrap: $('submissionTableWrap'),
@@ -68,7 +69,8 @@ const els = {
 };
 
 bindEvents();
-els.dateFilter.value = todayInputValue();
+els.startDateFilter.value = todayInputValue();
+els.endDateFilter.value = todayInputValue();
 
 onAuthStateChanged(auth, async (user) => {
     currentUser = user;
@@ -107,7 +109,8 @@ function bindEvents() {
     els.deleteSelectedBtn.addEventListener('click', openDeleteDialog);
     els.searchInput.addEventListener('input', renderSubmissions);
     els.statusFilter.addEventListener('change', renderSubmissions);
-    els.dateFilter.addEventListener('change', renderSubmissions);
+    els.startDateFilter.addEventListener('change', renderSubmissions);
+    els.endDateFilter.addEventListener('change', renderSubmissions);
     els.submissionTableWrap.addEventListener('click', handleTableClick);
     els.submissionTableWrap.addEventListener('change', handleTableSelection);
     els.cancelDeleteBtn.addEventListener('click', () => els.confirmDialog.close());
@@ -359,14 +362,23 @@ function formatDate(value) {
 }
 
 function matchesDateFilter(submission) {
-    const selectedDate = els.dateFilter.value;
-    if (!selectedDate) return true;
+    let start = dayStartMillis(els.startDateFilter.value);
+    let end = dayStartMillis(els.endDateFilter.value, 1);
+    if (start === null && end === null) return true;
     const millis = submittedMillis(submission);
     if (!millis) return false;
-    const [year, month, day] = selectedDate.split('-').map(Number);
-    const start = new Date(year, month - 1, day).getTime();
-    const end = new Date(year, month - 1, day + 1).getTime();
-    return millis >= start && millis < end;
+    if (start !== null && end !== null && start >= end) {
+        [start, end] = [dayStartMillis(els.endDateFilter.value), dayStartMillis(els.startDateFilter.value, 1)];
+    }
+    if (start !== null && millis < start) return false;
+    if (end !== null && millis >= end) return false;
+    return true;
+}
+
+function dayStartMillis(inputValue, dayOffset = 0) {
+    if (!inputValue) return null;
+    const [year, month, day] = inputValue.split('-').map(Number);
+    return new Date(year, month - 1, day + dayOffset).getTime();
 }
 
 function submittedMillis(submission) {

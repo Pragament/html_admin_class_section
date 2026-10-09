@@ -336,6 +336,58 @@ a.btn,
     min-width: 1220px;
 }
 
+.records-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 14px;
+}
+
+.records-filters .compact-field {
+    min-width: 150px;
+}
+
+.records-count {
+    margin: 14px 0 0;
+}
+
+.records-more {
+    justify-content: center;
+    margin-top: 12px;
+}
+
+.qa-table {
+    min-width: 720px;
+    table-layout: fixed;
+}
+
+.qa-table th:first-child {
+    width: 46%;
+}
+
+.qa-table td {
+    vertical-align: top;
+    overflow-wrap: anywhere;
+    line-height: 1.45;
+}
+
+.answer-meta {
+    margin-top: 4px;
+    color: var(--muted);
+    font-size: 12px;
+}
+
+.answer-text.correct {
+    color: var(--success);
+    font-weight: 700;
+}
+
+.answer-text.wrong {
+    color: var(--danger);
+    font-weight: 700;
+}
+
 .section-table th,
 .section-table td {
     border-bottom: 1px solid var(--line);
@@ -746,6 +798,7 @@ a.btn,
     .role-editor-head,
     .role-row,
     .student-panel-head,
+    .records-head,
     .toolbar {
         align-items: stretch;
         flex-direction: column;

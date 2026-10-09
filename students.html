@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>School Admin - Student Records</title>
+    <link rel="stylesheet" href="styles.css?v=20261009.2" />
+</head>
+<body>
+    <header class="topbar" id="topbar" hidden>
+        <div>
+            <h1>School Admin</h1>
+            <p id="statusText">Student records and answers</p>
+        </div>
+        <div class="topbar-actions">
+            <a class="btn" href="index.html">Home</a>
+            <a class="btn" href="submissions.html">Submissions</a>
+            <a class="btn" href="questions.html">Questions</a>
+            <button class="btn" id="refreshBtn" type="button">Refresh</button>
+            <button class="btn" id="logoutBtn" type="button">Logout</button>
+        </div>
+    </header>
+
+    <main class="app-shell">
+        <section class="login-panel" id="loginView">
+            <div>
+                <h1>Student Records</h1>
+                <p>Sign in with your school Google account to view student records.</p>
+            </div>
+            <button class="btn primary wide-btn" id="loginBtn" type="button">Google Login</button>
+            <a class="btn wide-btn" href="index.html">Back Home</a>
+        </section>
+
+        <section class="dashboard" id="dashboardView" hidden>
+            <section class="panel">
+                <div class="records-head">
+                    <div>
+                        <h2>Student Records</h2>
+                        <p class="muted-text" id="adminLabel"></p>
+                    </div>
+                    <button class="btn" id="exportBtn" type="button">Export CSV</button>
+                </div>
+
+                <div class="toolbar records-filters">
+                    <label class="field search-field">
+                        <span>Search</span>
+                        <input id="searchInput" type="search" placeholder="Student, admission no, question" />
+                    </label>
+                    <label class="field compact-field">
+                        <span>Section</span>
+                        <select id="sectionFilter"><option value="all">All sections</option></select>
+                    </label>
+                    <label class="field compact-field">
+                        <span>Class</span>
+                        <select id="classFilter"><option value="all">All classes</option></select>
+                    </label>
+                    <label class="field compact-field">
+                        <span>Subject</span>
+                        <select id="subjectFilter"><option value="all">All subjects</option></select>
+                    </label>
+                    <label class="field compact-field">
+                        <span>Type</span>
+                        <select id="typeFilter">
+                            <option value="all">All types</option>
+                            <option value="mcq">MCQ</option>
+                            <option value="short_answer">Short Answer</option>
+                            <option value="fib">Fill in the Blank</option>
+                            <option value="true_false">True / False</option>
+                        </select>
+                    </label>
+                    <label class="field compact-field">
+                        <span>Verified</span>
+                        <select id="verifiedFilter">
+                            <option value="all">All questions</option>
+                            <option value="verified">Verified</option>
+                            <option value="unverified">Unverified</option>
+                        </select>
+                    </label>
+                    <label class="field compact-field">
+                        <span>From</span>
+                        <input id="startDateFilter" type="date" />
+                    </label>
+                    <label class="field compact-field">
+                        <span>To</span>
+                        <input id="endDateFilter" type="date" />
+                    </label>
+                </div>
+
+                <p class="muted-text records-count" id="resultCount"></p>
+                <div id="answerTableWrap" class="table-wrap"></div>
+                <div class="form-actions records-more">
+                    <button class="btn" id="showMoreBtn" type="button" hidden>Show more</button>
+                </div>
+            </section>
+        </section>
+    </main>
+
+    <div id="toast" class="toast"></div>
+    <script type="module" src="students.js?v=20261009.4"></script>
+</body>
+</html>
