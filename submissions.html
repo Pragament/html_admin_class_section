@@ -17,6 +17,7 @@
             <a class="btn" href="classrooms.html">Classrooms</a>
             <a class="btn" href="questions.html">Questions</a>
             <a class="btn" href="taxonomy.html">Taxonomy</a>
+            <a class="btn" href="students.html">Student Records</a>
             <button class="btn" id="refreshBtn" type="button">Refresh</button>
             <button class="btn" id="logoutBtn" type="button">Logout</button>
         </div>
@@ -46,6 +47,7 @@
                     <a class="btn" href="classrooms.html">Classrooms</a>
                     <a class="btn" href="questions.html">Questions</a>
                     <a class="btn" href="taxonomy.html">Taxonomy</a>
+                    <a class="btn" href="students.html">Student Records</a>
                     <button class="btn danger" id="deleteSelectedBtn" type="button" disabled>Delete Selected</button>
                 </div>
             </section>
@@ -65,8 +67,12 @@
                         </select>
                     </label>
                     <label class="field compact-field">
-                        <span>Date</span>
-                        <input id="dateFilter" type="date" />
+                        <span>From</span>
+                        <input id="startDateFilter" type="date" />
+                    </label>
+                    <label class="field compact-field">
+                        <span>To</span>
+                        <input id="endDateFilter" type="date" />
                     </label>
                     <div class="toolbar-counts">
                         <span class="count-chip" id="submissionCount">0</span>
@@ -92,6 +98,6 @@
     </dialog>
 
     <div id="toast" class="toast"></div>
-    <script type="module" src="submissions.js?v=20260926.1"></script>
+    <script type="module" src="submissions.js?v=20261009.1"></script>
 </body>
 </html>

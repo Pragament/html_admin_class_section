@@ -61,6 +61,7 @@ const els = {
     deleteSelectedBtn: $('deleteSelectedBtn'),
     searchInput: $('searchInput'),
     statusFilter: $('statusFilter'),
+    typeFilter: $('typeFilter'),
     verifiedFilter: $('verifiedFilter'),
     likesFilter: $('likesFilter'),
     dislikesFilter: $('dislikesFilter'),
@@ -116,7 +117,7 @@ function bindEvents() {
     els.markVerifiedBtn.addEventListener('click', () => openActionDialog('verify'));
     els.removeVerifiedBtn.addEventListener('click', () => openActionDialog('unverify'));
     els.deleteSelectedBtn.addEventListener('click', () => openActionDialog('delete'));
-    [els.searchInput, els.statusFilter, els.verifiedFilter, els.likesFilter, els.dislikesFilter].forEach(el => {
+    [els.searchInput, els.statusFilter, els.typeFilter, els.verifiedFilter, els.likesFilter, els.dislikesFilter].forEach(el => {
         el.addEventListener('input', renderQuestions);
         el.addEventListener('change', renderQuestions);
     });
@@ -167,6 +168,7 @@ function renderQuestions() {
                 <tr>
                     <th scope="col"><input type="checkbox" data-select-all ${visible.every(question => selectedQuestionIds.has(question.id)) ? 'checked' : ''} /></th>
                     <th scope="col">Question</th>
+                    <th scope="col">Correct Answer</th>
                     <th scope="col">Type</th>
                     <th scope="col">Difficulty</th>
                     <th scope="col">Status</th>
@@ -185,7 +187,8 @@ function renderQuestions() {
                         <tr>
                             <td><input type="checkbox" data-select-question="${esc(question.id)}" ${selectedQuestionIds.has(question.id) ? 'checked' : ''} /></td>
                             <td><div class="preview-snippet">${esc(questionText(question))}</div></td>
-                            <td>${esc(question.type || '')}</td>
+                            <td><div class="preview-snippet">${esc(correctAnswerText(question)) || '<em>No answer stored</em>'}</div></td>
+                            <td>${esc(typeLabel(question.type))}</td>
                             <td>${esc(question.difficulty || '')}</td>
                             <td>${esc(question.status || '')}</td>
                             <td><span class="status-chip ${question.verified ? 'enabled' : 'disabled'}">${question.verified ? 'Verified' : 'Unverified'}</span></td>
@@ -230,6 +233,7 @@ function handleTableSelection(event) {
 function filteredQuestions() {
     const search = els.searchInput.value.trim().toLowerCase();
     const status = els.statusFilter.value;
+    const type = els.typeFilter.value;
     const verified = els.verifiedFilter.value;
     const minLikes = numberFilter(els.likesFilter.value);
     const minDislikes = numberFilter(els.dislikesFilter.value);
@@ -237,6 +241,7 @@ function filteredQuestions() {
     return questions.filter(question => {
         const counts = reactionCounts(question.id);
         if (status !== 'all' && question.status !== status) return false;
+        if (type !== 'all' && question.type !== type) return false;
         if (verified === 'verified' && !question.verified) return false;
         if (verified === 'unverified' && question.verified) return false;
         if (counts.likes < minLikes) return false;
@@ -385,6 +390,31 @@ function timestampMillis(value) {
         return (Number(value.seconds) * 1000) + Math.floor(Number(value.nanoseconds || 0) / 1000000);
     }
     return 0;
+}
+
+function typeLabel(type) {
+    const labels = { mcq: 'MCQ', short_answer: 'Short Answer', fib: 'Fill in the Blank', true_false: 'True / False' };
+    return labels[type] || type || '';
+}
+
+function correctAnswerText(question) {
+    if (question.type === 'mcq') {
+        return (question.options || [])
+            .map((option, index) => option?.correct ? `${String.fromCharCode(65 + index)}) ${stripHtml(option.html)}` : '')
+            .filter(Boolean)
+            .join(' | ');
+    }
+    if (question.type === 'short_answer') return stripHtml(question.shortAnswerHtml);
+    if (question.type === 'true_false') {
+        return typeof question.trueAnswer === 'boolean' ? (question.trueAnswer ? 'True' : 'False') : '';
+    }
+    if (question.type === 'fib') {
+        return (question.fibBanks || [])
+            .map(bank => (bank?.answers || []).join(' / '))
+            .filter(Boolean)
+            .join('; ');
+    }
+    return '';
 }
 
 function questionText(question) {

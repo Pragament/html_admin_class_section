@@ -194,6 +194,13 @@ Admin-relevant fields:
   status: 'published',
   verified: true,
   promptHtml: '<p>Question text</p>',
+  options: [{ html: 'Option text', correct: true }],
+  fibBanks: [{ label: 'Blank 1', answers: ['answer'] }],
+  trueAnswer: true,
+  shortAnswerHtml: '<p>Model answer</p>',
+  translations: {
+    Telugu: { question: '', options: [''], answer: '' }
+  },
   authorUid: 'firebase-auth-uid',
   authorName: 'Teacher Name',
   createdAt: Timestamp,
@@ -207,6 +214,8 @@ Admin moderation:
 - Like/dislike counts are computed from `qb_reactions_v1`.
 - Bulk verified actions set `verified` to `true` or `false`.
 - Bulk delete hard deletes selected question documents after a detailed confirmation preview.
+- Questions can be filtered by `type`, and the correct answer column reads `options[].correct`, `shortAnswerHtml`, `trueAnswer`, or `fibBanks[].answers` depending on type.
+- The Student Records page reads `classId`, `subjectId`, `verified`, `options`, and `shortAnswerHtml` to label and filter submitted answers.
 
 ### `qb_taxonomy_v1`
 

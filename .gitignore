@@ -7,3 +7,6 @@ Thumbs.db
 .vscode/
 .idea/
 
+# Generated question review exports
+questions-to-verify*.csv
+unverified-short-answers.csv
