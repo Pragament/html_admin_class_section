@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>School Admin - Questions</title>
-    <link rel="stylesheet" href="styles.css?v=20261010.1" />
+    <link rel="stylesheet" href="styles.css?v=20261010.3" />
 </head>
 <body>
     <header class="topbar" id="topbar" hidden>
@@ -40,11 +40,6 @@
                 </div>
                 <div class="action-bar">
                     <a class="btn" href="taxonomy.html">Taxonomy</a>
-                    <button class="btn" id="exportBtn" type="button">Export</button>
-                    <label class="btn file-btn">
-                        Import
-                        <input id="importInput" type="file" accept=".csv,text/csv" />
-                    </label>
                     <button class="btn" id="markVerifiedBtn" type="button" disabled>Mark Verified</button>
                     <button class="btn" id="removeVerifiedBtn" type="button" disabled>Remove Verified</button>
                     <button class="btn danger" id="deleteSelectedBtn" type="button" disabled>Delete Selected</button>
@@ -84,6 +79,22 @@
                             <option value="unverified">Unverified</option>
                         </select>
                     </label>
+                    <label class="field compact-field">
+                        <span>Explanation</span>
+                        <select id="explanationFilter">
+                            <option value="all">All</option>
+                            <option value="has">Has explanation</option>
+                            <option value="missing">Missing</option>
+                        </select>
+                    </label>
+                    <label class="field compact-field">
+                        <span>Explanation URL</span>
+                        <select id="explanationUrlFilter">
+                            <option value="all">All</option>
+                            <option value="has">Has URL</option>
+                            <option value="missing">Missing</option>
+                        </select>
+                    </label>
                     <label class="field mini-field">
                         <span>Likes >=</span>
                         <input id="likesFilter" type="number" min="0" step="1" placeholder="0" />
@@ -93,6 +104,11 @@
                         <input id="dislikesFilter" type="number" min="0" step="1" placeholder="0" />
                     </label>
                     <div class="toolbar-counts">
+                        <button class="btn" id="exportBtn" type="button">Export</button>
+                        <label class="btn file-btn">
+                            Import
+                            <input id="importInput" type="file" accept=".csv,text/csv" />
+                        </label>
                         <span class="count-chip" id="questionCount">0</span>
                         <span class="count-chip" id="selectedCount">0 selected</span>
                     </div>
@@ -139,6 +155,6 @@
     </dialog>
 
     <div id="toast" class="toast"></div>
-    <script type="module" src="questions.js?v=20261010.2"></script>
+    <script type="module" src="questions.js?v=20261010.7"></script>
 </body>
 </html>

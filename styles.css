@@ -333,7 +333,23 @@ a.btn,
 }
 
 .moderation-table {
-    min-width: 1220px;
+    min-width: 1740px;
+}
+
+.explanation-cell {
+    width: 280px;
+    font-size: 13px;
+    line-height: 1.4;
+    white-space: normal;
+}
+
+.explanation-url {
+    display: block;
+    width: 220px;
+    color: var(--primary);
+    font-size: 12px;
+    line-height: 1.4;
+    overflow-wrap: anywhere;
 }
 
 .records-head {
