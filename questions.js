@@ -35,6 +35,30 @@ const COLLECTIONS = {
 
 const ADMIN_EMAILS = [];
 
+const EXPORT_COLUMNS = [
+    { key: 'id', label: 'ID', value: question => question.id },
+    { key: 'question', label: 'Question', value: question => fullQuestionText(question) },
+    { key: 'correctAnswer', label: 'Correct Answer', value: question => correctAnswerText(question) },
+    { key: 'explanation', label: 'Explanations', value: question => question.explanation || '' },
+    { key: 'type', label: 'Type', value: question => typeLabel(question.type) },
+    { key: 'difficulty', label: 'Difficulty', value: question => question.difficulty || '' },
+    { key: 'status', label: 'Status', value: question => question.status || '' },
+    { key: 'verified', label: 'Verified', value: question => question.verified ? 'true' : 'false' },
+    { key: 'likes', label: 'Likes', value: question => reactionCounts(question.id).likes },
+    { key: 'dislikes', label: 'Dislikes', value: question => reactionCounts(question.id).dislikes },
+    { key: 'taxonomy', label: 'Taxonomy', value: question => taxonomyPath(question) },
+    { key: 'author', label: 'Author', value: question => question.authorName || question.authorUid || '' }
+];
+
+// CSV headers (normalized) that import is allowed to write back to the question document.
+const IMPORT_FIELDS = {
+    explanations: { field: 'explanation', parse: value => String(value ?? '').trim() },
+    explanation: { field: 'explanation', parse: value => String(value ?? '').trim() },
+    difficulty: { field: 'difficulty', parse: value => String(value ?? '').trim() },
+    status: { field: 'status', parse: value => String(value ?? '').trim().toLowerCase() },
+    verified: { field: 'verified', parse: value => parseBoolean(value) }
+};
+
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
@@ -44,6 +68,7 @@ let questions = [];
 let reactionsByQuestion = new Map();
 let selectedQuestionIds = new Set();
 let pendingAction = null;
+let pendingImport = [];
 let toastTimer = null;
 
 const $ = (id) => document.getElementById(id);
@@ -59,6 +84,16 @@ const els = {
     markVerifiedBtn: $('markVerifiedBtn'),
     removeVerifiedBtn: $('removeVerifiedBtn'),
     deleteSelectedBtn: $('deleteSelectedBtn'),
+    exportBtn: $('exportBtn'),
+    importInput: $('importInput'),
+    exportDialog: $('exportDialog'),
+    exportForm: $('exportForm'),
+    exportColumnList: $('exportColumnList'),
+    exportFilteredLabel: $('exportFilteredLabel'),
+    exportSelectedLabel: $('exportSelectedLabel'),
+    exportSelectAllBtn: $('exportSelectAllBtn'),
+    exportSelectNoneBtn: $('exportSelectNoneBtn'),
+    cancelExportBtn: $('cancelExportBtn'),
     searchInput: $('searchInput'),
     statusFilter: $('statusFilter'),
     typeFilter: $('typeFilter'),
@@ -117,6 +152,12 @@ function bindEvents() {
     els.markVerifiedBtn.addEventListener('click', () => openActionDialog('verify'));
     els.removeVerifiedBtn.addEventListener('click', () => openActionDialog('unverify'));
     els.deleteSelectedBtn.addEventListener('click', () => openActionDialog('delete'));
+    els.exportBtn.addEventListener('click', openExportDialog);
+    els.exportSelectAllBtn.addEventListener('click', () => setExportColumns(true));
+    els.exportSelectNoneBtn.addEventListener('click', () => setExportColumns(false));
+    els.cancelExportBtn.addEventListener('click', () => els.exportDialog.close());
+    els.exportForm.addEventListener('submit', exportCsv);
+    els.importInput.addEventListener('change', importCsv);
     [els.searchInput, els.statusFilter, els.typeFilter, els.verifiedFilter, els.likesFilter, els.dislikesFilter].forEach(el => {
         el.addEventListener('input', renderQuestions);
         el.addEventListener('change', renderQuestions);
@@ -169,6 +210,7 @@ function renderQuestions() {
                     <th scope="col"><input type="checkbox" data-select-all ${visible.every(question => selectedQuestionIds.has(question.id)) ? 'checked' : ''} /></th>
                     <th scope="col">Question</th>
                     <th scope="col">Correct Answer</th>
+                    <th scope="col">Explanations</th>
                     <th scope="col">Type</th>
                     <th scope="col">Difficulty</th>
                     <th scope="col">Status</th>
@@ -188,6 +230,7 @@ function renderQuestions() {
                             <td><input type="checkbox" data-select-question="${esc(question.id)}" ${selectedQuestionIds.has(question.id) ? 'checked' : ''} /></td>
                             <td><div class="preview-snippet">${esc(questionText(question))}</div></td>
                             <td><div class="preview-snippet">${esc(correctAnswerText(question)) || '<em>No answer stored</em>'}</div></td>
+                            <td><div class="preview-snippet">${esc(question.explanation || '')}</div></td>
                             <td>${esc(typeLabel(question.type))}</td>
                             <td>${esc(question.difficulty || '')}</td>
                             <td>${esc(question.status || '')}</td>
@@ -285,10 +328,21 @@ function openActionDialog(action) {
 async function runPendingAction(event) {
     event.preventDefault();
     const selected = selectedQuestions();
-    if (!pendingAction || !selected.length) return;
+    if (!pendingAction || (pendingAction !== 'import' && !selected.length)) return;
     els.confirmActionBtn.disabled = true;
     try {
-        if (pendingAction === 'delete') {
+        if (pendingAction === 'import') {
+            for (const change of pendingImport) {
+                await updateDoc(doc(db, COLLECTIONS.questions, change.question.id), {
+                    ...change.updates,
+                    updatedAt: serverTimestamp(),
+                    updatedBy: currentUser.email || currentUser.uid
+                });
+                Object.assign(change.question, change.updates);
+            }
+            toast(`${pendingImport.length} question${pendingImport.length === 1 ? '' : 's'} updated from CSV`);
+            pendingImport = [];
+        } else if (pendingAction === 'delete') {
             for (const question of selected) {
                 await deleteReactionsForQuestion(question.id);
                 await deleteDoc(doc(db, COLLECTIONS.questions, question.id));
@@ -307,7 +361,7 @@ async function runPendingAction(event) {
             }
             toast(verified ? 'Questions marked verified' : 'Verified flag removed');
         }
-        selectedQuestionIds = new Set();
+        if (pendingAction !== 'import') selectedQuestionIds = new Set();
         pendingAction = null;
         els.confirmDialog.close();
         renderQuestions();
@@ -316,6 +370,122 @@ async function runPendingAction(event) {
     } finally {
         els.confirmActionBtn.disabled = false;
     }
+}
+
+function openExportDialog() {
+    const filteredCount = filteredQuestions().length;
+    const selectedCount = selectedQuestionIds.size;
+    els.exportFilteredLabel.textContent = `Filtered questions (${filteredCount})`;
+    els.exportSelectedLabel.textContent = `Selected questions (${selectedCount})`;
+    els.exportForm.querySelector('[name="exportScope"][value="selected"]').disabled = selectedCount === 0;
+    els.exportForm.querySelector(`[name="exportScope"][value="${selectedCount ? 'selected' : 'filtered'}"]`).checked = true;
+    els.exportColumnList.innerHTML = EXPORT_COLUMNS.map(column => `
+        <label><input type="checkbox" data-export-column="${esc(column.key)}" checked /> ${esc(column.label)}</label>
+    `).join('');
+    els.exportDialog.showModal();
+}
+
+function setExportColumns(checked) {
+    els.exportColumnList.querySelectorAll('[data-export-column]').forEach(input => {
+        input.checked = checked;
+    });
+}
+
+function exportCsv(event) {
+    event.preventDefault();
+    const keys = new Set([...els.exportColumnList.querySelectorAll('[data-export-column]:checked')].map(input => input.dataset.exportColumn));
+    const columns = EXPORT_COLUMNS.filter(column => keys.has(column.key));
+    if (!columns.length) {
+        toast('Choose at least one column');
+        return;
+    }
+    const scope = els.exportForm.querySelector('[name="exportScope"]:checked')?.value;
+    const rows = scope === 'selected' ? selectedQuestions() : filteredQuestions();
+    if (!rows.length) {
+        toast('No questions to export');
+        return;
+    }
+    const csv = toCsv([columns.map(column => column.label)].concat(rows.map(question => columns.map(column => column.value(question)))));
+    const url = URL.createObjectURL(new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' }));
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'questions.csv';
+    a.click();
+    URL.revokeObjectURL(url);
+    els.exportDialog.close();
+}
+
+async function importCsv(event) {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+    try {
+        const rows = parseCsv((await file.text()).replace(/^﻿/, ''));
+        if (rows.length < 2) {
+            toast('CSV has no rows to import');
+            return;
+        }
+        const headers = rows[0].map(normalizeHeader);
+        const idIndex = headers.indexOf('id');
+        if (idIndex === -1) {
+            toast('CSV needs an ID column');
+            return;
+        }
+        const fieldColumns = headers
+            .map((header, index) => ({ index, config: IMPORT_FIELDS[header] }))
+            .filter(column => column.config);
+        if (!fieldColumns.length) {
+            toast('CSV has no importable columns (Explanations, Difficulty, Status, Verified)');
+            return;
+        }
+        const questionsById = new Map(questions.map(question => [question.id, question]));
+        const changes = [];
+        let skipped = 0;
+        for (const row of rows.slice(1)) {
+            if (!row.some(cell => String(cell || '').trim())) continue;
+            const question = questionsById.get(String(row[idIndex] || '').trim());
+            if (!question) {
+                skipped += 1;
+                continue;
+            }
+            const updates = {};
+            fieldColumns.forEach(({ index, config }) => {
+                const value = config.parse(row[index]);
+                const current = config.field === 'verified' ? Boolean(question.verified) : (question[config.field] ?? '');
+                if (value !== current) updates[config.field] = value;
+            });
+            if (Object.keys(updates).length) changes.push({ question, updates });
+        }
+        const skippedText = skipped ? ` ${skipped} row${skipped === 1 ? '' : 's'} with unknown ID skipped.` : '';
+        if (!changes.length) {
+            toast(`No changes found.${skippedText}`);
+            return;
+        }
+        pendingAction = 'import';
+        pendingImport = changes;
+        els.confirmTitle.textContent = 'Import Changes?';
+        els.confirmText.textContent = `This will update ${changes.length} question${changes.length === 1 ? '' : 's'} in qb_questions_v1.${skippedText}`;
+        els.confirmActionBtn.textContent = 'Import';
+        els.confirmActionBtn.classList.remove('danger');
+        els.previewList.innerHTML = changes.map(importPreview).join('');
+        els.confirmDialog.showModal();
+    } catch (error) {
+        toast(error.message || 'Unable to read CSV');
+    }
+}
+
+function importPreview({ question, updates }) {
+    return `
+        <article class="preview-card">
+            <strong>${esc(questionText(question))}</strong>
+            <dl>
+                <div><dt>ID</dt><dd><code>${esc(question.id)}</code></dd></div>
+                ${Object.entries(updates).map(([field, value]) => `
+                    <div><dt>${esc(field)}</dt><dd>${esc(question[field] ?? '') || '<em>empty</em>'} &rarr; ${esc(value) || '<em>empty</em>'}</dd></div>
+                `).join('')}
+            </dl>
+        </article>
+    `;
 }
 
 async function deleteReactionsForQuestion(questionId) {
@@ -418,7 +588,11 @@ function correctAnswerText(question) {
 }
 
 function questionText(question) {
-    return stripHtml(question.promptHtml || question.prompt || '').slice(0, 220);
+    return fullQuestionText(question).slice(0, 220);
+}
+
+function fullQuestionText(question) {
+    return stripHtml(question.promptHtml || question.prompt || '');
 }
 
 function taxonomyPath(question) {
@@ -429,6 +603,52 @@ function stripHtml(value) {
     const template = document.createElement('template');
     template.innerHTML = String(value || '');
     return (template.content.textContent || '').replace(/\s+/g, ' ').trim();
+}
+
+function parseCsv(text) {
+    const rows = [];
+    let row = [];
+    let value = '';
+    let inQuotes = false;
+    for (let index = 0; index < text.length; index += 1) {
+        const char = text[index];
+        const next = text[index + 1];
+        if (char === '"' && inQuotes && next === '"') {
+            value += '"';
+            index += 1;
+        } else if (char === '"') {
+            inQuotes = !inQuotes;
+        } else if (char === ',' && !inQuotes) {
+            row.push(value);
+            value = '';
+        } else if ((char === '\n' || char === '\r') && !inQuotes) {
+            if (char === '\r' && next === '\n') index += 1;
+            row.push(value);
+            rows.push(row);
+            row = [];
+            value = '';
+        } else {
+            value += char;
+        }
+    }
+    row.push(value);
+    if (row.length > 1 || row[0]) rows.push(row);
+    return rows;
+}
+
+function toCsv(rows) {
+    return rows.map(row => row.map(value => {
+        const text = String(value ?? '');
+        return /[",\n\r]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text;
+    }).join(',')).join('\n');
+}
+
+function normalizeHeader(value) {
+    return String(value || '').trim().toLowerCase().replace(/[^a-z0-9]/g, '');
+}
+
+function parseBoolean(value) {
+    return ['true', '1', 'yes', 'y', 'verified'].includes(String(value ?? '').trim().toLowerCase());
 }
 
 function numberFilter(value) {
