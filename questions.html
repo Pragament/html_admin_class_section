@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>School Admin - Questions</title>
-    <link rel="stylesheet" href="styles.css?v=20260926.1" />
+    <link rel="stylesheet" href="styles.css?v=20261010.3" />
 </head>
 <body>
     <header class="topbar" id="topbar" hidden>
@@ -79,6 +79,22 @@
                             <option value="unverified">Unverified</option>
                         </select>
                     </label>
+                    <label class="field compact-field">
+                        <span>Explanation</span>
+                        <select id="explanationFilter">
+                            <option value="all">All</option>
+                            <option value="has">Has explanation</option>
+                            <option value="missing">Missing</option>
+                        </select>
+                    </label>
+                    <label class="field compact-field">
+                        <span>Explanation URL</span>
+                        <select id="explanationUrlFilter">
+                            <option value="all">All</option>
+                            <option value="has">Has URL</option>
+                            <option value="missing">Missing</option>
+                        </select>
+                    </label>
                     <label class="field mini-field">
                         <span>Likes >=</span>
                         <input id="likesFilter" type="number" min="0" step="1" placeholder="0" />
@@ -88,6 +104,11 @@
                         <input id="dislikesFilter" type="number" min="0" step="1" placeholder="0" />
                     </label>
                     <div class="toolbar-counts">
+                        <button class="btn" id="exportBtn" type="button">Export</button>
+                        <label class="btn file-btn">
+                            Import
+                            <input id="importInput" type="file" accept=".csv,text/csv" />
+                        </label>
                         <span class="count-chip" id="questionCount">0</span>
                         <span class="count-chip" id="selectedCount">0 selected</span>
                     </div>
@@ -111,7 +132,29 @@
         </form>
     </dialog>
 
+    <dialog id="exportDialog" class="modal">
+        <form id="exportForm" class="modal-card">
+            <div>
+                <h2>Export Questions</h2>
+                <p>Choose the columns to include in the CSV.</p>
+            </div>
+            <div class="export-scope">
+                <label><input type="radio" name="exportScope" value="filtered" checked /> <span id="exportFilteredLabel">Filtered questions</span></label>
+                <label><input type="radio" name="exportScope" value="selected" /> <span id="exportSelectedLabel">Selected questions</span></label>
+            </div>
+            <div class="export-actions-row">
+                <button class="btn" id="exportSelectAllBtn" type="button">Select All</button>
+                <button class="btn" id="exportSelectNoneBtn" type="button">Select None</button>
+            </div>
+            <div id="exportColumnList" class="export-column-list"></div>
+            <div class="form-actions">
+                <button class="btn" id="cancelExportBtn" type="button">Cancel</button>
+                <button class="btn primary" id="confirmExportBtn" type="submit">Download CSV</button>
+            </div>
+        </form>
+    </dialog>
+
     <div id="toast" class="toast"></div>
-    <script type="module" src="questions.js?v=20261009.2"></script>
+    <script type="module" src="questions.js?v=20261010.7"></script>
 </body>
 </html>
