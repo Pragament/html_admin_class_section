@@ -68,6 +68,7 @@ const EXPORT_COLUMNS = [
     { key: 'likes', label: 'Likes', value: question => reactionCounts(question.id).likes },
     { key: 'dislikes', label: 'Dislikes', value: question => reactionCounts(question.id).dislikes },
     { key: 'taxonomy', label: 'Taxonomy', value: question => taxonomyPath(question) },
+    { key: 'translations', label: 'Translations', value: question => question.translations && typeof question.translations === 'object' ? JSON.stringify(question.translations) : '' },
     { key: 'author', label: 'Author', value: question => question.authorName || question.authorUid || '' }
 ];
 
