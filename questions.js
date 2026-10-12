@@ -319,6 +319,7 @@ function renderQuestions() {
                     <th scope="col"><input type="checkbox" data-select-all ${visible.every(question => selectedQuestionIds.has(question.id)) ? 'checked' : ''} /></th>
                     ${sortHeader('question', 'Question')}
                     ${sortHeader('correctAnswer', 'Correct Answer')}
+                    ${sortHeader('translations', 'Translations')}
                     ${sortHeader('explanation', 'Explanations')}
                     ${sortHeader('explanationUrl', 'Explanation URL')}
                     ${sortHeader('skill', 'Skill')}
@@ -344,6 +345,7 @@ function renderQuestions() {
                             <td><input type="checkbox" data-select-question="${esc(question.id)}" ${selectedQuestionIds.has(question.id) ? 'checked' : ''} /></td>
                             <td><div class="preview-snippet">${esc(questionText(question))}</div></td>
                             <td><div class="preview-snippet">${esc(correctAnswerText(question)) || '<em>No answer stored</em>'}</div></td>
+                            <td class="translations-cell">${translationsCell(question.translations)}</td>
                             <td><div class="explanation-cell">${esc(question.explanation || '')}</div></td>
                             <td>${explanationUrlCell(question.explanationUrl)}</td>
                             <td>${esc(question.skill || '')}</td>
@@ -366,6 +368,32 @@ function renderQuestions() {
         </table>
     ` : '<div class="empty-card">No questions found.</div>';
     updateSelectionState();
+}
+
+function translationsCell(translations) {
+    if (!translations || typeof translations !== 'object' || Array.isArray(translations)) {
+        return '<span class="muted-text">No translations</span>';
+    }
+
+    const entries = Object.entries(translations).filter(([, value]) =>
+        value && typeof value === 'object'
+    );
+    if (!entries.length) return '<span class="muted-text">No translations</span>';
+
+    return `<details class="translation-details">
+        <summary>${entries.length} language${entries.length === 1 ? '' : 's'}</summary>
+        <div class="translation-list">
+            ${entries.map(([language, value]) => {
+                const options = Array.isArray(value.options) ? value.options : [];
+                return `<section class="translation-item">
+                    <strong>${esc(language)}</strong>
+                    <div><span class="translation-label">Question:</span> ${esc(value.question || value.prompt || '') || '<em>Not provided</em>'}</div>
+                    ${options.length ? `<div><span class="translation-label">Options:</span><ol>${options.map(option => `<li>${esc(option)}</li>`).join('')}</ol></div>` : ''}
+                    <div><span class="translation-label">Answer:</span> ${esc(value.answer ?? value.correctAnswer ?? '') || '<em>Not provided</em>'}</div>
+                </section>`;
+            }).join('')}
+        </div>
+    </details>`;
 }
 
 function sortHeader(key, label) {
