@@ -173,6 +173,15 @@ Student CSV import/export columns:
 id,studentName,phone,enabled
 ```
 
+Student ID behavior:
+
+- `studentDocId` is the Firestore document ID, not a field stored inside the student document.
+- The section admin student create/edit form shows `studentDocId` as `Student ID`.
+- When creating a student, a blank `Student ID` creates a new document with an auto-generated Firestore ID.
+- When creating a student with a custom `Student ID`, the app writes `/classSections/{sectionId}/students/{studentDocId}` with `setDoc`.
+- Existing student IDs are shown as read-only while editing; edits update the existing document instead of renaming or moving it.
+- CSV import uses the `id` column as `studentDocId` when present, and creates an auto-ID document when `id` is blank.
+
 ### `qb_questions_v1`
 
 Path:
@@ -198,6 +207,12 @@ Admin-relevant fields:
   fibBanks: [{ label: 'Blank 1', answers: ['answer'] }],
   trueAnswer: true,
   shortAnswerHtml: '<p>Model answer</p>',
+  explanation: 'Teacher-facing explanation text',
+  explanationUrl: 'https://example.com/explanation',
+  skill: 'Listening',
+  actfl_level: 'Novice Low',
+  actfl_sublevel: 'Low',
+  actfl_mode: 'Interpretive',
   translations: {
     Telugu: { question: '', options: [''], answer: '' }
   },
@@ -215,6 +230,15 @@ Admin moderation:
 - Bulk verified actions set `verified` to `true` or `false`.
 - Bulk delete hard deletes selected question documents after a detailed confirmation preview.
 - Questions can be filtered by `type`, and the correct answer column reads `options[].correct`, `shortAnswerHtml`, `trueAnswer`, or `fibBanks[].answers` depending on type.
+- Questions can be filtered by whether `explanation` is present or missing.
+- Questions can be filtered by whether `explanationUrl` is present or missing. When present, the admin table shows it as an external link.
+- Questions can be filtered and sorted by `skill`, `actfl_level`, `actfl_sublevel`, and `actfl_mode`.
+- `skill` stores the LSRW skill. Supported admin filter/import values are `Listening`, `Speaking`, `Reading`, and `Writing`.
+- `actfl_level` stores the proficiency level. Supported admin filter/import values are `Novice Low`, `Novice Mid`, `Novice High`, `Intermediate Low`, `Intermediate Mid`, `Intermediate High`, `Advanced Low`, `Advanced Mid`, `Advanced High`, `Superior`, and `Distinguished`.
+- `actfl_sublevel` stores `Low`, `Mid`, or `High`; leave blank for `Superior` or `Distinguished`.
+- `actfl_mode` stores `Interpersonal`, `Interpretive`, or `Presentational`.
+- Question CSV export labels these columns as `Explanations` and `Explanation URL`. Import normalizes headers, so `explanation`, `explanations`, `explanationUrl`, or `explanation_url` map to the same Firestore fields.
+- Question CSV import/export also supports `skill`, `actfl_level`, `actfl_sublevel`, and `actfl_mode`. Import normalizes headers, so variants like `LSRW skill` and `actflLevel` are accepted.
 - The Student Records page reads `classId`, `subjectId`, `verified`, `options`, and `shortAnswerHtml` to label and filter submitted answers.
 
 ### `qb_taxonomy_v1`

@@ -46,6 +46,7 @@ let currentUser = null;
 let sections = [];
 let students = [];
 let activeSectionId = null;
+let editingStudentId = null;
 let pendingDeleteId = null;
 let pendingDeleteType = null;
 let toastTimer = null;
@@ -648,7 +649,9 @@ function openCreateStudentDialog() {
     els.studentDialogTitle.textContent = 'New Student';
     els.saveStudentBtn.textContent = 'Create Student';
     els.studentForm.reset();
+    editingStudentId = null;
     els.studentId.value = '';
+    els.studentId.readOnly = false;
     els.studentEnabled.checked = true;
     renderStudentPanelHeader();
     els.studentDialog.showModal();
@@ -659,7 +662,9 @@ function openEditStudentDialog(id) {
     if (!student) return;
     els.studentDialogTitle.textContent = `Edit ${studentLabel(student)}`;
     els.saveStudentBtn.textContent = 'Save Student';
+    editingStudentId = student.id;
     els.studentId.value = student.id;
+    els.studentId.readOnly = true;
     els.studentName.value = student.studentName || student.name || '';
     els.studentPhone.value = student.phone || '';
     els.studentEnabled.checked = student.enabled !== false;
@@ -671,33 +676,43 @@ async function saveStudent(event) {
     event.preventDefault();
     const section = activeSection();
     if (!section) return;
-    const id = els.studentId.value;
+    const id = els.studentId.value.trim();
     const data = studentFormData();
     try {
-        if (id) {
-            await updateDoc(studentDocRef(id), {
+        if (editingStudentId) {
+            const existingStudent = students.find(item => item.id === editingStudentId);
+            await updateDoc(studentDocRef(editingStudentId), {
                 ...data,
                 updatedAt: serverTimestamp(),
                 updatedBy: currentUser.email || currentUser.uid
             });
-            const student = students.find(item => item.id === id);
-            if (student) Object.assign(student, data);
+            if (existingStudent) Object.assign(existingStudent, data);
             toast('Student updated');
         } else {
+            if (id && students.some(item => item.id === id)) {
+                throw new Error('A student with this ID already exists');
+            }
             const createdDate = Date.now();
-            const newRef = await addDoc(studentCollectionRef(), {
+            const payload = {
                 ...data,
                 createdDate,
                 createdAt: serverTimestamp(),
                 updatedAt: serverTimestamp(),
                 createdBy: currentUser.email || currentUser.uid,
                 updatedBy: currentUser.email || currentUser.uid
-            });
-            students.push({ id: newRef.id, ...data, createdDate });
+            };
+            if (id) {
+                await setDoc(studentDocRef(id), payload);
+                students.push({ id, ...data, createdDate });
+            } else {
+                const newRef = await addDoc(studentCollectionRef(), payload);
+                students.push({ id: newRef.id, ...data, createdDate });
+            }
             toast('Student created');
         }
         students.sort(compareStudents);
         els.studentDialog.close();
+        editingStudentId = null;
         renderStudents();
         setStatus(`${students.length} student${students.length === 1 ? '' : 's'} loaded for ${sectionLabel(section)}`);
     } catch (error) {

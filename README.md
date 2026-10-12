@@ -36,6 +36,8 @@ id,studentName,phone,enabled
 
 Student imports are scoped to the section currently open in the admin UI. Rows with an `id` update that student document using merge. Rows without an `id` create a new student.
 
+The student create/edit form shows the Firestore document ID. Leave it blank when creating a student to auto-generate an ID, or enter a custom ID for a new student. Existing student IDs are read-only while editing.
+
 ## Classroom CSV Columns
 
 ```txt
@@ -59,6 +61,8 @@ Class, subject, verified state, MCQ option text, and current short-answer model 
 ## Question Moderation
 
 The questions page reads `qb_questions_v1` and `qb_reactions_v1`, computes like/dislike counts client-side, and supports bulk setting or removing `verified`. Bulk delete shows a detailed preview before deleting selected question documents.
+
+Question moderation supports CSV import/export, table columns, filters, and sorting for `skill`, `actfl_level`, `actfl_sublevel`, and `actfl_mode`.
 
 Questions can be filtered by type (MCQ, short answer, fill in the blank, true/false). The Correct Answer column shows the answer already stored on each question: the option marked correct for MCQs, `shortAnswerHtml` for short answers, `trueAnswer` for true/false, and the accepted `fibBanks` answers for fill in the blank.
 

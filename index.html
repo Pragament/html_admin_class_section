@@ -148,7 +148,6 @@
 
     <dialog id="studentDialog" class="modal">
         <form id="studentForm" class="modal-card">
-            <input id="studentId" type="hidden" />
             <div class="modal-head">
                 <div>
                     <h2 id="studentDialogTitle">New Student</h2>
@@ -157,6 +156,10 @@
                 <button class="btn" id="cancelStudentBtn" type="button">Cancel</button>
             </div>
             <div class="form-grid">
+                <label class="field">
+                    <span>Student ID</span>
+                    <input id="studentId" autocomplete="off" placeholder="Auto-generated if blank" />
+                </label>
                 <label class="field">
                     <span>Student Name</span>
                     <input id="studentName" required autocomplete="off" placeholder="Student full name" />
@@ -190,6 +193,6 @@
     </dialog>
 
     <div id="toast" class="toast"></div>
-    <script type="module" src="app.js?v=20260926.1"></script>
+    <script type="module" src="app.js?v=20261011.1"></script>
 </body>
 </html>
