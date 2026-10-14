@@ -88,14 +88,18 @@ For production security, deploy Firestore rules that authorize admins server-sid
 
 ## Run Locally
 
-From the repository root:
+Use Node.js 22 or newer. Keep the service account JSON outside the repository, then run from the repository root:
 
 ```bash
-python3 -m http.server 8000
+npm install
+export GOOGLE_APPLICATION_CREDENTIALS="/absolute/path/to/service-account.json"
+npm start
 ```
 
-Open:
+Open `http://127.0.0.1:8000/` and sign in with Google. No Cloud Functions deployment is needed. Account operations require an active `/schoolAdmins/{uid}` marker or `role: admin` claim. See [setup instructions](STUDENT_AUTH_DEPLOYMENT.md) for credential permissions and rules. `npm test` runs mock Firebase tests without changing live data.
 
-```txt
-http://localhost:8000/school-admin/
-```
+## Student Firebase Accounts
+
+The student form supports school email (login username), admission number, account creation, password reset, and disabling linked accounts. **Migrate Login Profiles** backfills UID-keyed profiles for existing linked students. Student CSV adds `email,admissionNo`; passwords are excluded. See [deployment and migration instructions](STUDENT_AUTH_DEPLOYMENT.md) before using these controls.
+
+**Bulk Create Accounts** downloads a CSV template for unlinked students in the open section. Fill `id,email,password,admissionNo`, preview it, and create accounts with per-student results. Existing linked accounts are skipped without password resets. Account CSV files contain initial credentials and should be kept private.

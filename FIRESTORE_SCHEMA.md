@@ -475,3 +475,7 @@ request.auth.uid == resource.data.teacherUid
 ```
 
 Without `teacherUid`, rules can authorize `classroomId` reads when `classroomId` matches an actual classroom document ID. Section-level fallback reads are harder to secure in Firestore rules because rules cannot query for "a classroom owned by this teacher with this sectionId." In that case, prefer adding `teacherUid` to submissions in the quiz-taking app.
+
+## Authenticated student profiles
+
+Roster records remain at `classSections/{sectionId}/students/{studentDocId}` and add `email`, `username` (same as email), `admissionNo`, `authUid`, and `studentKey`. The trusted account backend maintains `studentProfiles/{authUid}` for direct student login lookup. See [Student Auth Deployment](STUDENT_AUTH_DEPLOYMENT.md) for the profile schema, migration, access rules, and rollout requirements. Passwords must never appear in Firestore.
