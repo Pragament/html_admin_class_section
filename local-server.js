@@ -9,7 +9,8 @@ const PUBLIC_FILES = new Set([
     'index.html', 'app.js', 'styles.css', 'classrooms.html', 'classrooms.js',
     'students.html', 'students.js', 'submissions.html', 'submissions.js',
     'questions.html', 'questions.js', 'taxonomy.html', 'taxonomy.js',
-    'firebase-config.js', 'firebase-config.local.js', 'copy-data.html', 'copy-data.js'
+    'firebase-config.js', 'firebase-config.local.js', 'copy-data.html', 'copy-data.js',
+    'question-filters.js'
 ]);
 const TEAM_PROJECT_ID = 'eschool-dev-4c6b4';
 // The pages use firebase-config.local.js when it exists, so the server must use that same project.
