@@ -140,7 +140,7 @@ The selected option is saved into classrooms as:
 
 ```js
 {
-  sectionId: 'classSections document id',
+  sectionId: 'existing section value',
   sectionName: 'DSS grade 8'
 }
 ```
@@ -195,6 +195,7 @@ Admin-relevant fields:
 ```js
 {
   type: 'mcq',
+  sectionId: 'classSections document id',
   classId: 'class_ix',
   subjectId: 'class_ix__subject_mathematics',
   chapterId: 'class_ix__subject_mathematics__chapter_algebra',
@@ -233,6 +234,8 @@ Admin moderation:
 - Questions can be filtered by `type`, and the correct answer column reads `options[].correct`, `shortAnswerHtml`, `trueAnswer`, or `fibBanks[].answers` depending on type.
 - Questions can be filtered by whether `explanation` is present or missing, or by "With Hindi & Telugu translations" (English explanation plus `translations.Hindi.explanation` and `translations.Telugu.explanation`).
 - Questions can be filtered by whether `hints` has at least one non-blank hint.
+- Questions can be filtered by whether `translations` contains one or more language entries, using the same entry check as the Translations table cell (an `English` entry is not counted).
+- The Questions moderation page populates its SECTION filter from distinct, non-empty `sectionId` values in the loaded questions and combines the selected value with the other filters.
 - Questions can be filtered by whether `explanationUrl` is present or missing. When present, the admin table shows it as an external link.
 - Questions can be filtered and sorted by `skill`, `actfl_level`, `actfl_sublevel`, and `actfl_mode`.
 - `skill` stores the LSRW skill. Supported admin filter/import values are `Listening`, `Speaking`, `Reading`, and `Writing`.

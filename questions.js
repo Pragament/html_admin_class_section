@@ -215,6 +215,8 @@ const els = {
     difficultyFilter: $('difficultyFilter'),
     verifiedFilter: $('verifiedFilter'),
     explanationFilter: $('explanationFilter'),
+    translationFilter: $('translationFilter'),
+    sectionFilter: $('sectionFilter'),
     explanationUrlFilter: $('explanationUrlFilter'),
     hintsFilter: $('hintsFilter'),
     skillFilter: $('skillFilter'),
@@ -288,6 +290,8 @@ function bindEvents() {
         els.difficultyFilter,
         els.verifiedFilter,
         els.explanationFilter,
+        els.translationFilter,
+        els.sectionFilter,
         els.explanationUrlFilter,
         els.hintsFilter,
         els.skillFilter,
@@ -325,18 +329,46 @@ async function loadData() {
             getDocs(collection(db, COLLECTIONS.reactions))
         ]);
         questions = questionSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+        populateSectionFilter();
         reactionsByQuestion = buildReactionCounts(reactionSnap.docs.map(d => d.data()));
         selectedQuestionIds = new Set([...selectedQuestionIds].filter(id => questions.some(question => question.id === id)));
         renderQuestions();
         setStatus(`${questions.length} question${questions.length === 1 ? '' : 's'} loaded`);
     } catch (error) {
         questions = [];
+        populateSectionFilter();
         reactionsByQuestion = new Map();
         selectedQuestionIds = new Set();
         renderQuestions();
         setStatus(error.message || 'Unable to load questions');
         toast('Unable to load questions');
     }
+}
+
+function populateSectionFilter() {
+    const selectedSection = els.sectionFilter.value;
+    const sections = new Set();
+    questions.forEach(question => {
+        if (question.sectionId == null) return;
+        const sectionId = String(question.sectionId);
+        if (sectionId.trim()) sections.add(sectionId);
+    });
+
+    const allOption = document.createElement('option');
+    allOption.value = 'all';
+    allOption.textContent = 'All';
+    els.sectionFilter.replaceChildren(allOption);
+
+    [...sections]
+        .sort((a, b) => a.localeCompare(b))
+        .forEach(sectionId => {
+            const option = document.createElement('option');
+            option.value = sectionId;
+            option.textContent = sectionId;
+            els.sectionFilter.append(option);
+        });
+
+    els.sectionFilter.value = sections.has(selectedSection) ? selectedSection : 'all';
 }
 
 function renderQuestions() {
@@ -403,13 +435,7 @@ function renderQuestions() {
 }
 
 function translationsCell(translations) {
-    if (!translations || typeof translations !== 'object' || Array.isArray(translations)) {
-        return '<span class="muted-text">No translations</span>';
-    }
-
-    const entries = Object.entries(translations).filter(([language, value]) =>
-        value && typeof value === 'object' && language.trim().toLowerCase() !== 'english'
-    );
+    const entries = translationEntries(translations);
     if (!entries.length) return '<span class="muted-text">No translations</span>';
 
     return `<details class="translation-details">
@@ -427,6 +453,16 @@ function translationsCell(translations) {
             }).join('')}
         </div>
     </details>`;
+}
+
+function translationEntries(translations) {
+    if (!translations || typeof translations !== 'object' || Array.isArray(translations)) {
+        return [];
+    }
+
+    return Object.entries(translations).filter(([language, value]) =>
+        value && typeof value === 'object' && language.trim().toLowerCase() !== 'english'
+    );
 }
 
 function sortHeader(key, label) {
@@ -478,6 +514,8 @@ function filteredQuestions() {
     const difficulty = els.difficultyFilter.value;
     const verified = els.verifiedFilter.value;
     const explanation = els.explanationFilter.value;
+    const translation = els.translationFilter.value;
+    const section = els.sectionFilter.value;
     const explanationUrl = els.explanationUrlFilter.value;
     const hints = els.hintsFilter.value;
     const skill = els.skillFilter.value;
@@ -498,6 +536,10 @@ function filteredQuestions() {
         if (verified === 'unverified' && question.verified) return false;
         if (!matchesExplanationFilter(question, explanation)) return false;
         if (!matchesHintsFilter(question, hints)) return false;
+        const hasTranslations = translationEntries(question.translations).length > 0;
+        if (translation === 'has' && !hasTranslations) return false;
+        if (translation === 'missing' && hasTranslations) return false;
+        if (section !== 'all' && String(question.sectionId ?? '') !== section) return false;
         const hasExplanationUrl = Boolean(String(question.explanationUrl || '').trim());
         if (explanationUrl === 'has' && !hasExplanationUrl) return false;
         if (explanationUrl === 'missing' && hasExplanationUrl) return false;

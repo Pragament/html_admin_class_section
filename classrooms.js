@@ -43,7 +43,6 @@ const CSV_COLUMNS = [
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
-
 let currentUser = null;
 let classrooms = [];
 let selectedClassroomIds = new Set();
