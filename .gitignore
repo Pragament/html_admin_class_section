@@ -11,5 +11,13 @@ Thumbs.db
 questions-to-verify*.csv
 unverified-short-answers.csv
 
+# Local dependencies and credentials
+node_modules/
+.env
+.env.*
+service-account*.json
+serviceAccount*.json
+*-firebase-adminsdk-*.json
+
 # Personal Firebase project override
 firebase-config.local.js

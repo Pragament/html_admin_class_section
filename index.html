@@ -83,6 +83,8 @@
                             Import Students
                             <input id="studentCsvInput" type="file" accept=".csv,text/csv" />
                         </label>
+                        <button class="btn" id="bulkAccountsBtn" type="button">Bulk Create Accounts</button>
+                        <button class="btn" id="migrateProfilesBtn" type="button">Migrate Login Profiles</button>
                         <button class="btn" id="closeStudentPanelBtn" type="button">Close</button>
                     </div>
                 </div>
@@ -148,7 +150,6 @@
 
     <dialog id="studentDialog" class="modal">
         <form id="studentForm" class="modal-card">
-            <input id="studentId" type="hidden" />
             <div class="modal-head">
                 <div>
                     <h2 id="studentDialogTitle">New Student</h2>
@@ -158,14 +159,22 @@
             </div>
             <div class="form-grid">
                 <label class="field">
+                    <span>Student ID</span>
+                    <input id="studentId" autocomplete="off" placeholder="Auto-generated if blank" />
+                </label>
+                <label class="field">
                     <span>Student Name</span>
                     <input id="studentName" required autocomplete="off" placeholder="Student full name" />
                 </label>
+                <label class="field"><span>Admission Number</span><input id="studentAdmissionNo" autocomplete="off" /></label>
+                <label class="field"><span>School Email / Login Username</span><input id="studentEmail" type="email" autocomplete="off" /></label>
+                <label class="field"><span>Set / Reset Password</span><input id="studentPassword" type="password" minlength="8" maxlength="128" autocomplete="new-password" placeholder="Leave blank to keep current password" /></label>
                 <label class="field">
                     <span>Phone</span>
                     <input id="studentPhone" autocomplete="off" placeholder="+91..." />
                 </label>
             </div>
+            <p class="muted-text">Enter email and password to create a login account. Passwords are never saved in student records. Linked accounts are synchronized when saved.</p>
             <label class="toggle-field">
                 <input id="studentEnabled" type="checkbox" checked />
                 <span>Enabled</span>
@@ -174,6 +183,20 @@
                 <button class="btn primary" id="saveStudentBtn" type="submit">Save Student</button>
             </div>
         </form>
+    </dialog>
+
+    <dialog id="bulkAccountsDialog" class="modal">
+        <div class="modal-card">
+            <div class="modal-head"><div><h2>Bulk Create Student Accounts</h2><p id="bulkAccountsSection"></p></div><button id="closeBulkAccountsBtn" class="btn" type="button">Close</button></div>
+            <p>Download the template for students without login accounts. Fill in each school email and an initial password of 8–128 characters, then import it here. Existing linked accounts are skipped; passwords are never displayed or stored in Firestore.</p>
+            <div class="action-bar">
+                <button id="accountTemplateBtn" class="btn" type="button">Download Account Template</button>
+                <label class="btn file-btn">Preview Account CSV<input id="accountCsvInput" type="file" accept=".csv,text/csv" /></label>
+            </div>
+            <p id="bulkAccountsStatus" role="status" aria-live="polite"></p>
+            <div id="bulkAccountsPreview" class="table-wrap"></div>
+            <div class="form-actions"><button id="runBulkAccountsBtn" class="btn primary" type="button" disabled>Create Accounts</button><button id="stopBulkAccountsBtn" class="btn" type="button" hidden>Stop After Current Student</button></div>
+        </div>
     </dialog>
 
     <dialog id="confirmDialog" class="modal confirm-modal">
@@ -190,6 +213,6 @@
     </dialog>
 
     <div id="toast" class="toast"></div>
-    <script type="module" src="app.js?v=20260926.1"></script>
+    <script type="module" src="app.js?v=20261013.3"></script>
 </body>
 </html>

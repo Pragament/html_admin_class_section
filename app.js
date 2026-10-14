@@ -28,16 +28,38 @@ const COLLECTIONS = {
 const ADMIN_EMAILS = [];
 const MEMBER_ROLES = ['viewer', 'admin'];
 const CSV_COLUMNS = ['id', 'sectionName', 'className', 'title', 'sortOrder', 'enabled', 'members'];
-const STUDENT_CSV_COLUMNS = ['id', 'studentName', 'phone', 'enabled'];
+const STUDENT_CSV_COLUMNS = ['id', 'studentName', 'phone', 'enabled', 'email', 'admissionNo'];
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
+// Same-origin local API: the credential file is only loaded by the Node server.
+async function callStudentApi(operation, data) {
+    if (!auth.currentUser) throw new Error('Sign in first.');
+    const token = await auth.currentUser.getIdToken();
+    const response = await fetch(`/api/${operation}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify(data)
+    });
+    let result;
+    try { result = await response.json(); }
+    catch { throw new Error('Start the local admin server with npm start to use student account controls.'); }
+    if (!response.ok) {
+        const error = new Error(result.error?.message || 'Student account request failed.');
+        error.code = result.error?.code;
+        throw error;
+    }
+    return { data: result.data };
+}
+const manageAccount = data => callStudentApi('manageStudentAccount', data);
+const migrateProfiles = data => callStudentApi('migrateStudentProfiles', data);
 
 let currentUser = null;
 let sections = [];
 let students = [];
 let activeSectionId = null;
+let editingStudentId = null;
 let pendingDeleteId = null;
 let pendingDeleteType = null;
 let toastTimer = null;
@@ -90,6 +112,9 @@ const els = {
     studentId: $('studentId'),
     studentName: $('studentName'),
     studentPhone: $('studentPhone'),
+    studentEmail: $('studentEmail'),
+    studentAdmissionNo: $('studentAdmissionNo'),
+    studentPassword: $('studentPassword'),
     studentEnabled: $('studentEnabled'),
     saveStudentBtn: $('saveStudentBtn'),
     cancelStudentBtn: $('cancelStudentBtn'),
@@ -146,6 +171,8 @@ function bindEvents() {
     els.exportCsvBtn.addEventListener('click', exportSectionsCsv);
     els.sectionTemplateBtn.addEventListener('click', downloadSectionTemplate);
     els.csvInput.addEventListener('change', importSectionsCsv);
+    bindBulkAccountEvents();
+    $('migrateProfilesBtn').addEventListener('click', migrateLoginProfiles);
     els.newStudentBtn.addEventListener('click', openCreateStudentDialog);
     els.cancelStudentBtn.addEventListener('click', () => els.studentDialog.close());
     els.studentForm.addEventListener('submit', saveStudent);
@@ -397,6 +424,7 @@ async function importSectionsCsv(event) {
             const record = Object.fromEntries(headers.map((header, index) => [header, row[index] ?? '']));
             const data = sectionCsvData(record);
             if (!data.sectionName) continue;
+            if (record.password) throw new Error('Passwords must be set in the student form, not imported from CSV.');
             const id = String(record.id || '').trim();
             if (id) {
                 await setDoc(doc(db, COLLECTIONS.classSections, id), {
@@ -589,6 +617,8 @@ function renderStudents() {
             <thead>
                 <tr>
                     <th scope="col">Student</th>
+                    <th scope="col">Email / Username</th>
+                    <th scope="col">Login</th>
                     <th scope="col">Phone</th>
                     <th scope="col">Status</th>
                     <th scope="col">ID</th>
@@ -599,6 +629,8 @@ function renderStudents() {
                 ${visible.map(student => `
                     <tr>
                         <td><strong>${esc(studentLabel(student))}</strong></td>
+                        <td>${esc(student.email || '')}</td>
+                        <td>${student.authUid ? 'Linked' : 'No account'}</td>
                         <td>${esc(student.phone || '')}</td>
                         <td><span class="status-chip ${student.enabled === false ? 'disabled' : 'enabled'}">${student.enabled === false ? 'Disabled' : 'Enabled'}</span></td>
                         <td><code>${esc(student.id)}</code></td>
@@ -626,7 +658,7 @@ function filteredStudents() {
     const search = els.studentSearchInput.value.trim().toLowerCase();
     if (!search) return students;
     return students.filter(student => {
-        return [student.id, student.studentName, student.name, student.phone]
+        return [student.id, student.studentName, student.name, student.phone, student.email, student.admissionNo]
             .some(value => String(value || '').toLowerCase().includes(search));
     });
 }
@@ -640,7 +672,9 @@ function openCreateStudentDialog() {
     els.studentDialogTitle.textContent = 'New Student';
     els.saveStudentBtn.textContent = 'Create Student';
     els.studentForm.reset();
+    editingStudentId = null;
     els.studentId.value = '';
+    els.studentId.readOnly = false;
     els.studentEnabled.checked = true;
     renderStudentPanelHeader();
     els.studentDialog.showModal();
@@ -651,9 +685,14 @@ function openEditStudentDialog(id) {
     if (!student) return;
     els.studentDialogTitle.textContent = `Edit ${studentLabel(student)}`;
     els.saveStudentBtn.textContent = 'Save Student';
+    editingStudentId = student.id;
     els.studentId.value = student.id;
+    els.studentId.readOnly = true;
     els.studentName.value = student.studentName || student.name || '';
     els.studentPhone.value = student.phone || '';
+    els.studentEmail.value = student.email || '';
+    els.studentAdmissionNo.value = student.admissionNo || student.id;
+    els.studentPassword.value = '';
     els.studentEnabled.checked = student.enabled !== false;
     renderStudentPanelHeader();
     els.studentDialog.showModal();
@@ -663,37 +702,70 @@ async function saveStudent(event) {
     event.preventDefault();
     const section = activeSection();
     if (!section) return;
-    const id = els.studentId.value;
+    const id = els.studentId.value.trim();
     const data = studentFormData();
+    const password = els.studentPassword.value;
+    let savedId = editingStudentId || id;
+    els.saveStudentBtn.disabled = true;
     try {
-        if (id) {
-            await updateDoc(studentDocRef(id), {
-                ...data,
-                updatedAt: serverTimestamp(),
-                updatedBy: currentUser.email || currentUser.uid
-            });
-            const student = students.find(item => item.id === id);
-            if (student) Object.assign(student, data);
+        if (id.includes('/')) throw new Error('Student ID cannot contain /');
+        if (password && !data.email) throw new Error('Email is required to create an account');
+        if (editingStudentId) {
+            const existingStudent = students.find(item => item.id === editingStudentId);
+            if (existingStudent?.authUid) {
+                await manageAccount({ sectionId: section.id, studentId: editingStudentId, student: data, ...(password ? { password } : {}) });
+            } else {
+                await updateDoc(studentDocRef(editingStudentId), {
+                    ...data, updatedAt: serverTimestamp(), updatedBy: currentUser.email || currentUser.uid
+                });
+            }
+            if (existingStudent) Object.assign(existingStudent, data);
             toast('Student updated');
         } else {
+            if (id && students.some(item => item.id === id)) {
+                throw new Error('A student with this ID already exists');
+            }
             const createdDate = Date.now();
-            const newRef = await addDoc(studentCollectionRef(), {
+            const payload = {
                 ...data,
                 createdDate,
                 createdAt: serverTimestamp(),
                 updatedAt: serverTimestamp(),
                 createdBy: currentUser.email || currentUser.uid,
                 updatedBy: currentUser.email || currentUser.uid
-            });
-            students.push({ id: newRef.id, ...data, createdDate });
+            };
+            if (id) {
+                await setDoc(studentDocRef(id), payload);
+                students.push({ id, ...data, createdDate });
+            } else {
+                const newRef = await addDoc(studentCollectionRef(), payload);
+                savedId = newRef.id;
+                students.push({ id: newRef.id, ...data, createdDate });
+            }
             toast('Student created');
         }
+        const savedStudent = students.find(item => item.id === savedId);
+        if ((password || savedStudent?.authUid) && !savedStudent?.authUid) {
+            await manageAccount({ sectionId: section.id, studentId: savedId, ...(password ? { password } : {}) });
+            await loadStudents();
+        }
+        if (savedStudent?.authUid) await loadStudents();
+        els.studentPassword.value = '';
         students.sort(compareStudents);
         els.studentDialog.close();
+        editingStudentId = null;
         renderStudents();
         setStatus(`${students.length} student${students.length === 1 ? '' : 's'} loaded for ${sectionLabel(section)}`);
     } catch (error) {
+        if (savedId && students.some(item => item.id === savedId)) {
+            editingStudentId = savedId;
+            els.studentId.value = savedId;
+            els.studentId.readOnly = true;
+        }
         toast(error.message || 'Unable to save student');
+    } finally {
+        els.studentPassword.value = '';
+        els.saveStudentBtn.disabled = false;
     }
 }
 
@@ -703,6 +775,8 @@ function studentFormData() {
         studentName,
         name: studentName,
         phone: els.studentPhone.value.trim(),
+        email: els.studentEmail.value.trim().toLowerCase(),
+        admissionNo: els.studentAdmissionNo.value.trim() || els.studentId.value.trim(),
         enabled: els.studentEnabled.checked
     };
 }
@@ -720,6 +794,8 @@ function openDeleteStudentDialog(id) {
 async function deleteStudent() {
     if (!pendingDeleteId) return;
     try {
+        const student = students.find(item => item.id === pendingDeleteId);
+        if (student?.authUid) throw new Error('Disable and save this linked student instead to revoke login access.');
         await deleteDoc(studentDocRef(pendingDeleteId));
         students = students.filter(student => student.id !== pendingDeleteId);
         pendingDeleteId = null;
@@ -744,7 +820,8 @@ function exportStudentsCsv() {
             student.id,
             student.studentName || student.name || '',
             student.phone || '',
-            student.enabled === false ? 'false' : 'true'
+            student.enabled === false ? 'false' : 'true',
+            student.email || '', student.admissionNo || student.id
         ]);
     });
     const fileName = `${slugify(sectionLabel(section)) || 'section'}-students.csv`;
@@ -756,7 +833,7 @@ function downloadStudentTemplate() {
     const filePrefix = section ? slugify(sectionLabel(section)) : 'section';
     downloadBlob(new Blob([toCsv([
         STUDENT_CSV_COLUMNS,
-        ['', 'Student full name', '+91...', 'true']
+        ['', 'Student full name', '+91...', 'true', 'student@school.edu', '102']
     ])], { type: 'text/csv;charset=utf-8' }), `${filePrefix || 'section'}-students-template.csv`);
 }
 
@@ -778,13 +855,16 @@ async function importStudentsCsv(event) {
             const record = Object.fromEntries(headers.map((header, index) => [header, row[index] ?? '']));
             const data = studentCsvData(record);
             if (!data.studentName) continue;
+            if (record.password) throw new Error('Passwords must be set in the student form, not imported from CSV.');
             const id = String(record.id || '').trim();
             if (id) {
-                await setDoc(studentDocRef(id), {
-                    ...data,
-                    updatedAt: serverTimestamp(),
-                    updatedBy: currentUser.email || currentUser.uid
-                }, { merge: true });
+                if (students.find(item => item.id === id)?.authUid) {
+                    await manageAccount({ sectionId: section.id, studentId: id, student: data });
+                } else {
+                    await setDoc(studentDocRef(id), {
+                        ...data, updatedAt: serverTimestamp(), updatedBy: currentUser.email || currentUser.uid
+                    }, { merge: true });
+                }
             } else {
                 await addDoc(studentCollectionRef(), {
                     ...data,
@@ -810,8 +890,150 @@ function studentCsvData(record) {
         studentName,
         name: studentName,
         phone: String(record.phone || record.mobilenumber || record.mobile || '').trim(),
-        enabled: parseBoolean(record.enabled, true)
+        enabled: parseBoolean(record.enabled, true),
+        ...(record.email !== undefined ? { email: String(record.email).trim().toLowerCase() } : {}),
+        ...(record.admissionno !== undefined ? { admissionNo: String(record.admissionno).trim() } : {})
     };
+}
+
+let accountRows = [];
+let accountSectionId = null;
+let bulkAccountBusy = false;
+let stopBulkAccounts = false;
+
+function bindBulkAccountEvents() {
+    $('bulkAccountsBtn').addEventListener('click', () => {
+        if (!activeSectionId) return;
+        accountSectionId = activeSectionId;
+        accountRows = [];
+        $('bulkAccountsSection').textContent = `Section: ${sectionLabel(activeSection())}`;
+        $('bulkAccountsStatus').textContent = 'Choose a CSV to preview.';
+        $('bulkAccountsPreview').innerHTML = '';
+        $('runBulkAccountsBtn').disabled = true;
+        $('bulkAccountsDialog').showModal();
+    });
+    $('closeBulkAccountsBtn').addEventListener('click', () => $('bulkAccountsDialog').close());
+    $('bulkAccountsDialog').addEventListener('cancel', event => { if (bulkAccountBusy) event.preventDefault(); });
+    $('bulkAccountsDialog').addEventListener('close', () => { accountRows = []; accountSectionId = null; });
+    $('stopBulkAccountsBtn').addEventListener('click', () => { stopBulkAccounts = true; $('stopBulkAccountsBtn').disabled = true; });
+    $('accountTemplateBtn').addEventListener('click', () => {
+        const rows = [['id', 'email', 'password', 'admissionNo']];
+        students.filter(student => !student.authUid).forEach(student => rows.push([student.id, student.email || '', '', student.admissionNo || student.id]));
+        downloadBlob(new Blob([toCsv(rows)], { type: 'text/csv;charset=utf-8' }), 'student-accounts-template.csv');
+    });
+    $('accountCsvInput').addEventListener('change', previewAccountCsv);
+    $('runBulkAccountsBtn').addEventListener('click', createBulkAccounts);
+}
+
+async function previewAccountCsv(event) {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    accountRows = [];
+    $('runBulkAccountsBtn').disabled = true;
+    if (!file) return;
+    try {
+        if (file.size > 2 * 1024 * 1024) throw new Error('Account CSV must be smaller than 2 MB.');
+        const parsed = parseCsv(await file.text());
+        const headers = (parsed.shift() || []).map(normalizeHeader);
+        if (!['id', 'email', 'password'].every(header => headers.includes(header))) throw new Error('Required CSV columns: id,email,password. Optional: admissionNo.');
+        if (new Set(headers).size !== headers.length) throw new Error('CSV column names must be unique.');
+        const ids = new Set();
+        const emails = new Set();
+        for (const row of parsed) {
+            if (!row.some(value => String(value).trim())) continue;
+            const record = Object.fromEntries(headers.map((header, index) => [header, row[index] || '']));
+            const id = record.id.trim();
+            const email = record.email.trim().toLowerCase();
+            const student = students.find(item => item.id === id);
+            let message = '';
+            if (!student) message = 'ID does not exist in this section';
+            else if (ids.has(id)) message = 'Duplicate student ID';
+            else if (student.authUid) message = 'Already linked — will skip';
+            else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) message = 'Valid school email required';
+            else if (emails.has(email)) message = 'Duplicate email';
+            else if (record.password.length < 8 || record.password.length > 128) message = 'Password must be 8–128 characters';
+            ids.add(id);
+            if (!student?.authUid) emails.add(email);
+            accountRows.push({ id, email, password: record.password, admissionNo: record.admissionno?.trim() || student?.admissionNo || id,
+                name: student ? studentLabel(student) : '', status: student?.authUid ? 'skip' : message ? 'invalid' : 'ready', message });
+        }
+        if (!accountRows.length) throw new Error('CSV has no student rows.');
+        renderAccountPreview();
+        const invalid = accountRows.filter(row => row.status === 'invalid').length;
+        const ready = accountRows.filter(row => row.status === 'ready').length;
+        $('bulkAccountsStatus').textContent = `${ready} ready; ${invalid} invalid; ${accountRows.filter(row => row.status === 'skip').length} already linked. ${invalid ? 'Correct invalid rows and reload the CSV.' : ''}`;
+        $('runBulkAccountsBtn').disabled = invalid > 0 || ready === 0;
+    } catch (error) {
+        accountRows = [];
+        $('bulkAccountsPreview').innerHTML = '';
+        $('bulkAccountsStatus').textContent = error.message || 'Unable to preview CSV';
+    }
+}
+
+function renderAccountPreview() {
+    $('bulkAccountsPreview').innerHTML = `<table class="section-table"><thead><tr><th>ID</th><th>Student</th><th>Email / Username</th><th>Result</th></tr></thead><tbody>${accountRows.map(row => `<tr><td>${esc(row.id)}</td><td>${esc(row.name)}</td><td>${esc(row.email)}</td><td>${esc(row.message || row.status)}</td></tr>`).join('')}</tbody></table>`;
+}
+
+async function createBulkAccounts() {
+    if (bulkAccountBusy || !accountSectionId || accountRows.some(row => row.status === 'invalid')) return;
+    bulkAccountBusy = true;
+    stopBulkAccounts = false;
+    $('runBulkAccountsBtn').disabled = true;
+    $('closeBulkAccountsBtn').disabled = true;
+    $('accountCsvInput').disabled = true;
+    $('accountTemplateBtn').disabled = true;
+    $('stopBulkAccountsBtn').hidden = false;
+    $('stopBulkAccountsBtn').disabled = false;
+    const sectionId = accountSectionId;
+    try {
+        for (const row of accountRows) {
+            if (stopBulkAccounts) break;
+            if (row.status !== 'ready') { row.password = ''; continue; }
+            $('bulkAccountsStatus').textContent = `Creating account for student ${row.id}…`;
+            try {
+                const result = await manageAccount({ sectionId, studentId: row.id, createOnly: true, password: row.password,
+                    student: { email: row.email, admissionNo: row.admissionNo } });
+                row.status = result.data.status === 'skipped' ? 'skip' : 'created';
+                row.message = row.status === 'skip' ? 'Already linked — skipped' : 'Account and login profile created';
+            } catch (error) {
+                row.status = 'failed';
+                row.message = error.message || 'Account creation failed';
+                // Stop on quota, authorization, connection or server failures to avoid repeated failed requests.
+                if (!['already-exists', 'invalid-argument', 'failed-precondition', 'not-found'].includes(error.code)) stopBulkAccounts = true;
+            } finally { row.password = ''; }
+            renderAccountPreview();
+        }
+    } finally {
+        accountRows.forEach(row => { row.password = ''; });
+        $('bulkAccountsStatus').textContent = `${accountRows.filter(row => row.status === 'created').length} created; ${accountRows.filter(row => row.status === 'skip').length} skipped; ${accountRows.filter(row => row.status === 'failed').length} failed; ${accountRows.filter(row => row.status === 'ready').length} not processed. Reload the CSV to retry remaining students.`;
+        bulkAccountBusy = false;
+        $('closeBulkAccountsBtn').disabled = false;
+        $('accountCsvInput').disabled = false;
+        $('accountTemplateBtn').disabled = false;
+        $('stopBulkAccountsBtn').hidden = true;
+        if (activeSectionId === sectionId) await loadStudents();
+    }
+}
+
+async function migrateLoginProfiles() {
+    if (!activeSectionId) return;
+    const button = $('migrateProfilesBtn');
+    button.disabled = true;
+    try {
+        const sectionId = activeSectionId;
+        const data = { results: [] };
+        let afterId = null;
+        do {
+            const response = await migrateProfiles({ sectionId, afterId });
+            data.results.push(...response.data.results);
+            afterId = response.data.nextId;
+        } while (afterId);
+        const counts = data.results.reduce((acc, row) => { acc[row.status] = (acc[row.status] || 0) + 1; return acc; }, {});
+        setStatus(`Profiles migrated: ${counts.migrated || 0}; need accounts: ${counts['needs-account'] || 0}; failed: ${counts.failed || 0}${data.limited ? '; limited to first 200 students' : ''}`);
+        await loadStudents();
+        alert(data.results.map(row => `${row.id}: ${row.status}${row.message ? ' — ' + row.message : ''}`).join('\n') || 'No students to migrate.');
+    } catch (error) { toast(error.message || 'Migration failed'); }
+    finally { button.disabled = false; }
 }
 
 function activeSection() {

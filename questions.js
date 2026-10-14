@@ -26,6 +26,22 @@ const COLLECTIONS = {
 };
 
 const ADMIN_EMAILS = [];
+const SKILL_OPTIONS = ['Listening', 'Speaking', 'Reading', 'Writing'];
+const ACTFL_LEVEL_OPTIONS = [
+    'Novice Low',
+    'Novice Mid',
+    'Novice High',
+    'Intermediate Low',
+    'Intermediate Mid',
+    'Intermediate High',
+    'Advanced Low',
+    'Advanced Mid',
+    'Advanced High',
+    'Superior',
+    'Distinguished'
+];
+const ACTFL_SUBLEVEL_OPTIONS = ['Low', 'Mid', 'High'];
+const ACTFL_MODE_OPTIONS = ['Interpersonal', 'Interpretive', 'Presentational'];
 
 const EXPORT_COLUMNS = [
     { key: 'id', label: 'ID', value: question => question.id },
@@ -33,6 +49,10 @@ const EXPORT_COLUMNS = [
     { key: 'correctAnswer', label: 'Correct Answer', value: question => correctAnswerText(question) },
     { key: 'explanation', label: 'Explanations', value: question => question.explanation || '' },
     { key: 'explanationUrl', label: 'Explanation URL', value: question => question.explanationUrl || '' },
+    { key: 'skill', label: 'skill', value: question => question.skill || '' },
+    { key: 'actflLevel', label: 'actfl_level', value: question => question.actfl_level || '' },
+    { key: 'actflSublevel', label: 'actfl_sublevel', value: question => question.actfl_sublevel || '' },
+    { key: 'actflMode', label: 'actfl_mode', value: question => question.actfl_mode || '' },
     { key: 'type', label: 'Type', value: question => typeLabel(question.type) },
     { key: 'difficulty', label: 'Difficulty', value: question => question.difficulty || '' },
     { key: 'status', label: 'Status', value: question => question.status || '' },
@@ -40,6 +60,7 @@ const EXPORT_COLUMNS = [
     { key: 'likes', label: 'Likes', value: question => reactionCounts(question.id).likes },
     { key: 'dislikes', label: 'Dislikes', value: question => reactionCounts(question.id).dislikes },
     { key: 'taxonomy', label: 'Taxonomy', value: question => taxonomyPath(question) },
+    { key: 'translations', label: 'Translations', value: question => question.translations && typeof question.translations === 'object' ? JSON.stringify(question.translations) : '' },
     { key: 'author', label: 'Author', value: question => question.authorName || question.authorUid || '' }
 ];
 
@@ -70,6 +91,30 @@ const IMPORT_COLUMNS = {
             return { explanationUrl: text };
         }
     },
+    skill: {
+        label: 'Skill',
+        read: question => question.skill || '',
+        caseInsensitive: () => true,
+        apply: (question, text) => ({ skill: normalizedOption(text, SKILL_OPTIONS, 'Skill', true) })
+    },
+    actfllevel: {
+        label: 'ACTFL Level',
+        read: question => question.actfl_level || '',
+        caseInsensitive: () => true,
+        apply: (question, text) => ({ actfl_level: normalizedOption(text, ACTFL_LEVEL_OPTIONS, 'ACTFL Level', true) })
+    },
+    actflsublevel: {
+        label: 'ACTFL Sublevel',
+        read: question => question.actfl_sublevel || '',
+        caseInsensitive: () => true,
+        apply: (question, text) => ({ actfl_sublevel: normalizedOption(text, ACTFL_SUBLEVEL_OPTIONS, 'ACTFL Sublevel', true) })
+    },
+    actflmode: {
+        label: 'ACTFL Mode',
+        read: question => question.actfl_mode || '',
+        caseInsensitive: () => true,
+        apply: (question, text) => ({ actfl_mode: normalizedOption(text, ACTFL_MODE_OPTIONS, 'ACTFL Mode', true) })
+    },
     difficulty: {
         label: 'Difficulty',
         read: question => question.difficulty || '',
@@ -93,6 +138,7 @@ const IMPORT_COLUMNS = {
     }
 };
 IMPORT_COLUMNS.explanation = IMPORT_COLUMNS.explanations;
+IMPORT_COLUMNS.lsrwskill = IMPORT_COLUMNS.skill;
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
@@ -104,6 +150,7 @@ let reactionsByQuestion = new Map();
 let selectedQuestionIds = new Set();
 let pendingAction = null;
 let pendingImport = [];
+let sortState = { key: 'updatedAt', direction: 'desc' };
 let toastTimer = null;
 
 const $ = (id) => document.getElementById(id);
@@ -135,6 +182,10 @@ const els = {
     verifiedFilter: $('verifiedFilter'),
     explanationFilter: $('explanationFilter'),
     explanationUrlFilter: $('explanationUrlFilter'),
+    skillFilter: $('skillFilter'),
+    actflLevelFilter: $('actflLevelFilter'),
+    actflSublevelFilter: $('actflSublevelFilter'),
+    actflModeFilter: $('actflModeFilter'),
     likesFilter: $('likesFilter'),
     dislikesFilter: $('dislikesFilter'),
     questionCount: $('questionCount'),
@@ -195,10 +246,24 @@ function bindEvents() {
     els.cancelExportBtn.addEventListener('click', () => els.exportDialog.close());
     els.exportForm.addEventListener('submit', exportCsv);
     els.importInput.addEventListener('change', importCsv);
-    [els.searchInput, els.statusFilter, els.typeFilter, els.verifiedFilter, els.explanationFilter, els.explanationUrlFilter, els.likesFilter, els.dislikesFilter].forEach(el => {
+    [
+        els.searchInput,
+        els.statusFilter,
+        els.typeFilter,
+        els.verifiedFilter,
+        els.explanationFilter,
+        els.explanationUrlFilter,
+        els.skillFilter,
+        els.actflLevelFilter,
+        els.actflSublevelFilter,
+        els.actflModeFilter,
+        els.likesFilter,
+        els.dislikesFilter
+    ].forEach(el => {
         el.addEventListener('input', renderQuestions);
         el.addEventListener('change', renderQuestions);
     });
+    els.questionTableWrap.addEventListener('click', handleTableClick);
     els.questionTableWrap.addEventListener('change', handleTableSelection);
     els.cancelActionBtn.addEventListener('click', () => els.confirmDialog.close());
     els.confirmForm.addEventListener('submit', runPendingAction);
@@ -222,7 +287,7 @@ async function loadData() {
             getDocs(collection(db, COLLECTIONS.questions)),
             getDocs(collection(db, COLLECTIONS.reactions))
         ]);
-        questions = questionSnap.docs.map(d => ({ id: d.id, ...d.data() })).sort(compareQuestions);
+        questions = questionSnap.docs.map(d => ({ id: d.id, ...d.data() }));
         reactionsByQuestion = buildReactionCounts(reactionSnap.docs.map(d => d.data()));
         selectedQuestionIds = new Set([...selectedQuestionIds].filter(id => questions.some(question => question.id === id)));
         renderQuestions();
@@ -238,26 +303,31 @@ async function loadData() {
 }
 
 function renderQuestions() {
-    const visible = filteredQuestions();
+    const visible = sortedQuestions();
     els.questionCount.textContent = String(visible.length);
     els.questionTableWrap.innerHTML = visible.length ? `
         <table class="section-table moderation-table">
             <thead>
                 <tr>
                     <th scope="col"><input type="checkbox" data-select-all ${visible.every(question => selectedQuestionIds.has(question.id)) ? 'checked' : ''} /></th>
-                    <th scope="col">Question</th>
-                    <th scope="col">Correct Answer</th>
-                    <th scope="col">Explanations</th>
-                    <th scope="col">Explanation URL</th>
-                    <th scope="col">Type</th>
-                    <th scope="col">Difficulty</th>
-                    <th scope="col">Status</th>
-                    <th scope="col">Verified</th>
-                    <th scope="col">Likes</th>
-                    <th scope="col">Dislikes</th>
-                    <th scope="col">Taxonomy</th>
-                    <th scope="col">Author</th>
-                    <th scope="col">ID</th>
+                    ${sortHeader('question', 'Question')}
+                    ${sortHeader('correctAnswer', 'Correct Answer')}
+                    ${sortHeader('translations', 'Translations')}
+                    ${sortHeader('explanation', 'Explanations')}
+                    ${sortHeader('explanationUrl', 'Explanation URL')}
+                    ${sortHeader('skill', 'Skill')}
+                    ${sortHeader('actflLevel', 'ACTFL Level')}
+                    ${sortHeader('actflSublevel', 'ACTFL Sublevel')}
+                    ${sortHeader('actflMode', 'ACTFL Mode')}
+                    ${sortHeader('type', 'Type')}
+                    ${sortHeader('difficulty', 'Difficulty')}
+                    ${sortHeader('status', 'Status')}
+                    ${sortHeader('verified', 'Verified')}
+                    ${sortHeader('likes', 'Likes')}
+                    ${sortHeader('dislikes', 'Dislikes')}
+                    ${sortHeader('taxonomy', 'Taxonomy')}
+                    ${sortHeader('author', 'Author')}
+                    ${sortHeader('id', 'ID')}
                 </tr>
             </thead>
             <tbody>
@@ -268,8 +338,13 @@ function renderQuestions() {
                             <td><input type="checkbox" data-select-question="${esc(question.id)}" ${selectedQuestionIds.has(question.id) ? 'checked' : ''} /></td>
                             <td><div class="preview-snippet">${esc(questionText(question))}</div></td>
                             <td><div class="preview-snippet">${esc(correctAnswerText(question)) || '<em>No answer stored</em>'}</div></td>
+                            <td class="translations-cell">${translationsCell(question.translations)}</td>
                             <td><div class="explanation-cell">${esc(question.explanation || '')}</div></td>
                             <td>${explanationUrlCell(question.explanationUrl)}</td>
+                            <td>${esc(question.skill || '')}</td>
+                            <td>${esc(question.actfl_level || '')}</td>
+                            <td>${esc(question.actfl_sublevel || '')}</td>
+                            <td>${esc(question.actfl_mode || '')}</td>
                             <td>${esc(typeLabel(question.type))}</td>
                             <td>${esc(question.difficulty || '')}</td>
                             <td>${esc(question.status || '')}</td>
@@ -286,6 +361,50 @@ function renderQuestions() {
         </table>
     ` : '<div class="empty-card">No questions found.</div>';
     updateSelectionState();
+}
+
+function translationsCell(translations) {
+    if (!translations || typeof translations !== 'object' || Array.isArray(translations)) {
+        return '<span class="muted-text">No translations</span>';
+    }
+
+    const entries = Object.entries(translations).filter(([, value]) =>
+        value && typeof value === 'object'
+    );
+    if (!entries.length) return '<span class="muted-text">No translations</span>';
+
+    return `<details class="translation-details">
+        <summary>${entries.length} language${entries.length === 1 ? '' : 's'}</summary>
+        <div class="translation-list">
+            ${entries.map(([language, value]) => {
+                const options = Array.isArray(value.options) ? value.options : [];
+                return `<section class="translation-item">
+                    <strong>${esc(language)}</strong>
+                    <div><span class="translation-label">Question:</span> ${esc(value.question || value.prompt || '') || '<em>Not provided</em>'}</div>
+                    ${options.length ? `<div><span class="translation-label">Options:</span><ol>${options.map(option => `<li>${esc(option)}</li>`).join('')}</ol></div>` : ''}
+                    <div><span class="translation-label">Answer:</span> ${esc(value.answer ?? value.correctAnswer ?? '') || '<em>Not provided</em>'}</div>
+                </section>`;
+            }).join('')}
+        </div>
+    </details>`;
+}
+
+function sortHeader(key, label) {
+    const active = sortState.key === key;
+    const marker = active ? (sortState.direction === 'asc' ? ' ↑' : ' ↓') : '';
+    return `<th scope="col"><button class="sort-btn" type="button" data-sort="${key}">${esc(label)}${marker}</button></th>`;
+}
+
+function handleTableClick(event) {
+    const sortButton = event.target.closest('[data-sort]');
+    if (!sortButton) return;
+    const key = sortButton.dataset.sort;
+    if (sortState.key === key) {
+        sortState.direction = sortState.direction === 'asc' ? 'desc' : 'asc';
+    } else {
+        sortState = { key, direction: ['likes', 'dislikes', 'updatedAt'].includes(key) ? 'desc' : 'asc' };
+    }
+    renderQuestions();
 }
 
 function handleTableSelection(event) {
@@ -319,6 +438,10 @@ function filteredQuestions() {
     const verified = els.verifiedFilter.value;
     const explanation = els.explanationFilter.value;
     const explanationUrl = els.explanationUrlFilter.value;
+    const skill = els.skillFilter.value;
+    const actflLevel = els.actflLevelFilter.value;
+    const actflSublevel = els.actflSublevelFilter.value;
+    const actflMode = els.actflModeFilter.value;
     const minLikes = numberFilter(els.likesFilter.value);
     const minDislikes = numberFilter(els.dislikesFilter.value);
 
@@ -334,6 +457,11 @@ function filteredQuestions() {
         const hasExplanationUrl = Boolean(String(question.explanationUrl || '').trim());
         if (explanationUrl === 'has' && !hasExplanationUrl) return false;
         if (explanationUrl === 'missing' && hasExplanationUrl) return false;
+        if (skill !== 'all' && question.skill !== skill) return false;
+        if (actflLevel !== 'all' && question.actfl_level !== actflLevel) return false;
+        if (actflSublevel === 'blank' && String(question.actfl_sublevel || '').trim()) return false;
+        if (actflSublevel !== 'all' && actflSublevel !== 'blank' && question.actfl_sublevel !== actflSublevel) return false;
+        if (actflMode !== 'all' && question.actfl_mode !== actflMode) return false;
         if (counts.likes < minLikes) return false;
         if (counts.dislikes < minDislikes) return false;
         if (!search) return true;
@@ -342,6 +470,10 @@ function filteredQuestions() {
             questionText(question),
             question.type,
             question.difficulty,
+            question.skill,
+            question.actfl_level,
+            question.actfl_sublevel,
+            question.actfl_mode,
             question.status,
             question.authorName,
             question.authorUid,
@@ -352,6 +484,53 @@ function filteredQuestions() {
             question.topicId
         ].some(value => String(value || '').toLowerCase().includes(search));
     });
+}
+
+function sortedQuestions() {
+    return [...filteredQuestions()].sort((a, b) => {
+        const direction = sortState.direction === 'asc' ? 1 : -1;
+        return compareSortValues(sortValue(a, sortState.key), sortValue(b, sortState.key), sortState.key) * direction;
+    });
+}
+
+function sortValue(question, key) {
+    const counts = reactionCounts(question.id);
+    const values = {
+        id: question.id,
+        question: fullQuestionText(question),
+        correctAnswer: correctAnswerText(question),
+        explanation: question.explanation || '',
+        explanationUrl: question.explanationUrl || '',
+        skill: question.skill || '',
+        actflLevel: question.actfl_level || '',
+        actflSublevel: question.actfl_sublevel || '',
+        actflMode: question.actfl_mode || '',
+        type: typeLabel(question.type),
+        difficulty: question.difficulty || '',
+        status: question.status || '',
+        verified: question.verified ? 1 : 0,
+        likes: counts.likes,
+        dislikes: counts.dislikes,
+        taxonomy: taxonomyPath(question),
+        author: question.authorName || question.authorUid || '',
+        updatedAt: updatedMillis(question)
+    };
+    return values[key] ?? '';
+}
+
+function compareSortValues(a, b, key) {
+    if (key === 'actflLevel') return optionIndex(ACTFL_LEVEL_OPTIONS, a) - optionIndex(ACTFL_LEVEL_OPTIONS, b);
+    if (key === 'actflSublevel') return optionIndex(['', ...ACTFL_SUBLEVEL_OPTIONS], a) - optionIndex(['', ...ACTFL_SUBLEVEL_OPTIONS], b);
+    if (key === 'skill') return optionIndex(SKILL_OPTIONS, a) - optionIndex(SKILL_OPTIONS, b);
+    if (key === 'actflMode') return optionIndex(ACTFL_MODE_OPTIONS, a) - optionIndex(ACTFL_MODE_OPTIONS, b);
+    if (typeof a === 'number' && typeof b === 'number') return a - b;
+    return String(a || '').localeCompare(String(b || ''), undefined, { numeric: true, sensitivity: 'base' });
+}
+
+function optionIndex(options, value) {
+    const normalized = String(value || '').toLowerCase();
+    const index = options.findIndex(option => String(option || '').toLowerCase() === normalized);
+    return index === -1 ? Number.MAX_SAFE_INTEGER : index;
 }
 
 function openActionDialog(action) {
@@ -585,6 +764,14 @@ function correctAnswerUpdates(question, text) {
 
 function cleanCell(value) {
     return String(value ?? '').replace(/\s+/g, ' ').trim();
+}
+
+function normalizedOption(value, options, label, allowBlank = false) {
+    const text = cleanCell(value);
+    if (!text && allowBlank) return '';
+    const match = options.find(option => option.toLowerCase() === text.toLowerCase());
+    if (!match) throw new Error(`${label} must be one of: ${options.join(', ')}${allowBlank ? ', or blank' : ''}`);
+    return match;
 }
 
 function textToHtml(text) {

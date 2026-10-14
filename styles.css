@@ -333,7 +333,52 @@ a.btn,
 }
 
 .moderation-table {
-    min-width: 1740px;
+    min-width: 2200px;
+}
+
+.translations-cell {
+    min-width: 280px;
+    max-width: 420px;
+    white-space: normal;
+    vertical-align: top !important;
+    line-height: 1.45;
+}
+
+.translation-details summary {
+    cursor: pointer;
+    color: var(--primary);
+    font-weight: 800;
+    padding: 4px 0;
+}
+
+.translation-list {
+    display: grid;
+    gap: 8px;
+    min-width: 250px;
+    max-width: 400px;
+    padding-top: 8px;
+}
+
+.translation-item {
+    display: grid;
+    gap: 5px;
+    border: 1px solid var(--line);
+    border-radius: 7px;
+    background: var(--panel-soft);
+    padding: 9px;
+    overflow-wrap: anywhere;
+}
+
+.translation-label {
+    color: #41546b;
+    font-size: 11px;
+    font-weight: 900;
+    text-transform: uppercase;
+}
+
+.translation-item ol {
+    margin: 4px 0 0 20px;
+    padding: 0;
 }
 
 .explanation-cell {

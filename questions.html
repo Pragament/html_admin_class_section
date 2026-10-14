@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>School Admin - Questions</title>
-    <link rel="stylesheet" href="styles.css?v=20261010.3" />
+    <link rel="stylesheet" href="styles.css?v=20261012.2" />
 </head>
 <body>
     <header class="topbar" id="topbar" hidden>
@@ -95,6 +95,52 @@
                             <option value="missing">Missing</option>
                         </select>
                     </label>
+                    <label class="field compact-field">
+                        <span>Skill</span>
+                        <select id="skillFilter">
+                            <option value="all">All</option>
+                            <option value="Listening">Listening</option>
+                            <option value="Speaking">Speaking</option>
+                            <option value="Reading">Reading</option>
+                            <option value="Writing">Writing</option>
+                        </select>
+                    </label>
+                    <label class="field compact-field">
+                        <span>ACTFL Level</span>
+                        <select id="actflLevelFilter">
+                            <option value="all">All</option>
+                            <option value="Novice Low">Novice Low</option>
+                            <option value="Novice Mid">Novice Mid</option>
+                            <option value="Novice High">Novice High</option>
+                            <option value="Intermediate Low">Intermediate Low</option>
+                            <option value="Intermediate Mid">Intermediate Mid</option>
+                            <option value="Intermediate High">Intermediate High</option>
+                            <option value="Advanced Low">Advanced Low</option>
+                            <option value="Advanced Mid">Advanced Mid</option>
+                            <option value="Advanced High">Advanced High</option>
+                            <option value="Superior">Superior</option>
+                            <option value="Distinguished">Distinguished</option>
+                        </select>
+                    </label>
+                    <label class="field compact-field">
+                        <span>ACTFL Sublevel</span>
+                        <select id="actflSublevelFilter">
+                            <option value="all">All</option>
+                            <option value="blank">Blank</option>
+                            <option value="Low">Low</option>
+                            <option value="Mid">Mid</option>
+                            <option value="High">High</option>
+                        </select>
+                    </label>
+                    <label class="field compact-field">
+                        <span>ACTFL Mode</span>
+                        <select id="actflModeFilter">
+                            <option value="all">All</option>
+                            <option value="Interpersonal">Interpersonal</option>
+                            <option value="Interpretive">Interpretive</option>
+                            <option value="Presentational">Presentational</option>
+                        </select>
+                    </label>
                     <label class="field mini-field">
                         <span>Likes >=</span>
                         <input id="likesFilter" type="number" min="0" step="1" placeholder="0" />
@@ -155,6 +201,6 @@
     </dialog>
 
     <div id="toast" class="toast"></div>
-    <script type="module" src="questions.js?v=20261010.7"></script>
+    <script type="module" src="questions.js?v=20261012.2"></script>
 </body>
 </html>
