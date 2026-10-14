@@ -82,6 +82,12 @@ const ADMIN_EMAILS = ['admin@example.com'];
 
 For production security, deploy Firestore rules that authorize admins server-side, such as a `/schoolAdmins/{uid}` marker document.
 
+## Using Your Own Firebase Project
+
+All pages read their config from `firebase-config.js`, which defaults to the team project. To use your own project, copy `firebase-config.local.example.js` to `firebase-config.local.js` (git-ignored) and paste your web app config. Enable Google sign-in and Firestore in that project, and add `localhost` to its authorized domains.
+
+To seed it, open `copy-data.html`, sign in to both projects, pick collections, and copy. Document IDs are kept; same-ID documents in your project are overwritten.
+
 ## Run Locally
 
 From the repository root:

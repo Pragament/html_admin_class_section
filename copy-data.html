@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>School Admin - Copy Data</title>
+    <link rel="stylesheet" href="styles.css?v=20260926.1" />
+    <style>
+        .copy-log {
+            max-height: 360px;
+            overflow: auto;
+            padding: 12px;
+            border-radius: 8px;
+            background: #0f172a;
+            color: #e2e8f0;
+            font: 13px/1.5 Consolas, monospace;
+            white-space: pre-wrap;
+        }
+        .collection-list {
+            display: grid;
+            gap: 8px;
+            margin: 12px 0;
+        }
+        .collection-list label {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+    </style>
+</head>
+<body>
+    <header class="topbar" id="topbar">
+        <div>
+            <h1>School Admin</h1>
+            <p>Copy team data into your own Firebase project</p>
+        </div>
+        <div class="topbar-actions">
+            <a class="btn" href="index.html">Home</a>
+        </div>
+    </header>
+
+    <main class="app-shell">
+        <section class="panel">
+            <h2>Projects</h2>
+            <p>Source (read only): <strong id="sourceProject"></strong></p>
+            <p>Target (written to): <strong id="targetProject"></strong></p>
+            <p id="configWarning" hidden>
+                No personal project configured. Copy <code>firebase-config.local.example.js</code> to
+                <code>firebase-config.local.js</code>, paste your project's config, and reload.
+            </p>
+            <div class="action-bar">
+                <button class="btn" id="sourceLoginBtn" type="button">1. Sign in to source</button>
+                <button class="btn" id="targetLoginBtn" type="button">2. Sign in to target</button>
+            </div>
+        </section>
+
+        <section class="panel">
+            <h2>Collections</h2>
+            <p>Documents keep their IDs. Existing documents with the same ID in the target are overwritten.</p>
+            <div class="collection-list" id="collectionList"></div>
+            <button class="btn primary" id="copyBtn" type="button" disabled>3. Copy selected</button>
+        </section>
+
+        <section class="panel">
+            <h2>Log</h2>
+            <div class="copy-log" id="log"></div>
+        </section>
+    </main>
+
+    <script type="module" src="copy-data.js?v=20261014.1"></script>
+</body>
+</html>

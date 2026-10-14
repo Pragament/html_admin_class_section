@@ -10,3 +10,6 @@ Thumbs.db
 # Generated question review exports
 questions-to-verify*.csv
 unverified-short-answers.csv
+
+# Personal Firebase project override
+firebase-config.local.js
