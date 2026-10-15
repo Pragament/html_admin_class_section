@@ -28,6 +28,12 @@ id,sectionName,className,title,sortOrder,enabled,members
 Rows with an `id` update that section document using merge. Rows without an `id` create a new section.
 Use `email:role` pairs separated by semicolons in `members`, such as `teacher@example.com:admin;parent@example.com:viewer`.
 
+The homepage queries `members` with `array-contains-any` using the signed-in lowercase email and the `admin`/`viewer` roles. The matching rules are in `firestore.rules`, based on the supplied project rules. Publish that file in the Firebase console's Firestore Rules tab for `eschool-dev-4c6b4` to apply the correction. The section membership helper uses a map `in sectionData.members`; the previous `members is list` and `hasAny()` expression denied the query in emulator verification. A school-admin marker alone does not grant section read access under these rules.
+
+The submissions page loads classrooms owned by the signed-in UID and classrooms in sections where that email has the `admin` role. Submissions are queried by each owned classroom's document ID and each administered section's ID, then deduplicated. A viewer membership alone does not grant submission review access. Owner access requires submissions to reference the classroom document ID; historical class-code references need an authorized `sectionId` to appear through section-admin access. Deletion is disabled because the supplied rules forbid deleting submissions. Date filters initially show today; widen the range to see older results. Failed loads display an error instead of an empty result.
+
+To verify section access against an isolated local Firestore emulator, run `FIRESTORE_RULES_TEST_HOST=127.0.0.1:8190 node --test tests/firestore-rules.test.js`. This test installs the rules and writes fixtures only to the emulator's `demo-section-rules` project.
+
 ## Student CSV Columns
 
 ```txt

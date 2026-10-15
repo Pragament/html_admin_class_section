@@ -11,7 +11,9 @@ import {
     deleteDoc,
     doc,
     getDocs,
-    getFirestore
+    getFirestore,
+    query,
+    where
 } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
 
 const firebaseConfig = {
@@ -25,6 +27,7 @@ const firebaseConfig = {
 };
 
 const COLLECTIONS = {
+    sections: 'classSections',
     classrooms: 'classrooms',
     submissions: 'qb_quiz_submissions_v1'
 };
@@ -38,6 +41,7 @@ const db = getFirestore(app);
 let currentUser = null;
 let classrooms = [];
 let submissions = [];
+let submissionsLoadError = '';
 let selectedSubmissionIds = new Set();
 let sortState = { key: 'submittedAtMillis', direction: 'desc' };
 let toastTimer = null;
@@ -82,6 +86,7 @@ onAuthStateChanged(auth, async (user) => {
     if (!user) {
         classrooms = [];
         submissions = [];
+        submissionsLoadError = '';
         selectedSubmissionIds = new Set();
         setStatus('Sign in with Google');
         renderSubmissions();
@@ -129,14 +134,34 @@ function isAllowedAdmin(user) {
 
 async function loadData() {
     if (!currentUser) return;
+    submissionsLoadError = '';
     setStatus('Loading classrooms and submissions...');
     try {
-        const [classroomSnap, submissionSnap] = await Promise.all([
-            getDocs(collection(db, COLLECTIONS.classrooms)),
-            getDocs(collection(db, COLLECTIONS.submissions))
+        const user = currentUser;
+        const email = String(user.email || '').toLowerCase();
+        if (!email) throw new Error('Your signed-in account needs an email address to view submissions.');
+        const [ownedClassrooms, adminSections] = await Promise.all([
+            getDocs(query(collection(db, COLLECTIONS.classrooms), where('creatorId', '==', user.uid))),
+            getDocs(query(collection(db, COLLECTIONS.sections), where('members', 'array-contains', { email, role: 'admin' })))
         ]);
-        classrooms = classroomSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-        submissions = submissionSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+        const sectionIds = adminSections.docs.map(section => section.id);
+        const sectionClassrooms = await Promise.all(sectionIds.map(sectionId =>
+            getDocs(query(collection(db, COLLECTIONS.classrooms), where('sectionId', '==', sectionId)))
+        ));
+        const classroomDocs = new Map([ownedClassrooms, ...sectionClassrooms]
+            .flatMap(snapshot => snapshot.docs).map(document => [document.id, document]));
+        const submissionSnapshots = await Promise.all([
+            ...ownedClassrooms.docs.map(classroom =>
+                getDocs(query(collection(db, COLLECTIONS.submissions), where('classroomId', '==', classroom.id)))
+            ),
+            ...sectionIds.map(sectionId =>
+                getDocs(query(collection(db, COLLECTIONS.submissions), where('sectionId', '==', sectionId)))
+            )
+        ]);
+        if (currentUser !== user) return;
+        classrooms = [...classroomDocs.values()].map(document => ({ ...document.data(), id: document.id }));
+        submissions = [...new Map(submissionSnapshots.flatMap(snapshot => snapshot.docs)
+            .map(document => [document.id, { ...document.data(), id: document.id }])).values()];
         selectedSubmissionIds = new Set([...selectedSubmissionIds].filter(id => submissions.some(item => item.id === id)));
         renderSubmissions();
         setStatus(`${submissions.length} submission${submissions.length === 1 ? '' : 's'} loaded`);
@@ -144,8 +169,11 @@ async function loadData() {
         classrooms = [];
         submissions = [];
         selectedSubmissionIds = new Set();
+        submissionsLoadError = error.code === 'permission-denied'
+            ? 'Unable to load submissions: access was denied. Check the published Firestore rules and your section admin membership, then refresh.'
+            : error.message || 'Unable to load submissions. Please refresh to try again.';
         renderSubmissions();
-        setStatus(error.message || 'Unable to load submissions');
+        setStatus(submissionsLoadError);
         toast('Unable to load submissions');
     }
 }
@@ -189,7 +217,7 @@ function renderSubmissions() {
                 }).join('')}
             </tbody>
         </table>
-    ` : '<div class="empty-card">No submissions found.</div>';
+    ` : `<div class="empty-card"${submissionsLoadError ? ' role="alert"' : ''}>${esc(submissionsLoadError || (submissions.length ? 'No submissions match the current filters. Adjust the date range, status, or search.' : 'No submissions found in your classrooms or administered sections.'))}</div>`;
     updateSelectionState();
 }
 
@@ -335,7 +363,8 @@ async function deleteSelectedSubmissions(event) {
 function updateSelectionState() {
     const selectedCount = selectedSubmissionIds.size;
     els.selectedCount.textContent = `${selectedCount} selected`;
-    els.deleteSelectedBtn.disabled = selectedCount === 0;
+    els.deleteSelectedBtn.disabled = true;
+    els.deleteSelectedBtn.title = 'Submission deletion is disabled by the Firestore rules.';
 }
 
 function classroomLabel(classroom) {

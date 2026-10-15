@@ -13,9 +13,11 @@ import {
     doc,
     getDocs,
     getFirestore,
+    query,
     serverTimestamp,
     setDoc,
-    updateDoc
+    updateDoc,
+    where
 } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
 
 const firebaseConfig = {
@@ -65,6 +67,7 @@ const migrateProfiles = data => callStudentApi('migrateStudentProfiles', data);
 
 let currentUser = null;
 let sections = [];
+let sectionsLoadError = '';
 let students = [];
 let activeSectionId = null;
 let editingStudentId = null;
@@ -145,6 +148,7 @@ onAuthStateChanged(auth, async (user) => {
 
     if (!user) {
         sections = [];
+        sectionsLoadError = '';
         students = [];
         closeStudentPanel();
         setStatus('Sign in with Google');
@@ -205,9 +209,15 @@ function isAllowedAdmin(user) {
 
 async function loadSections() {
     if (!currentUser) return;
+    sectionsLoadError = '';
     setStatus('Loading sections...');
     try {
-        const snap = await getDocs(collection(db, COLLECTIONS.classSections));
+        const email = String(currentUser.email || '').toLowerCase();
+        if (!email) throw new Error('Your signed-in account needs an email address to view class sections.');
+        const snap = await getDocs(query(
+            collection(db, COLLECTIONS.classSections),
+            where('members', 'array-contains-any', MEMBER_ROLES.map(role => ({ email, role })))
+        ));
         sections = snap.docs.map(d => ({ id: d.id, ...d.data() })).sort(compareSections);
         if (activeSectionId && !sections.some(section => section.id === activeSectionId)) {
             closeStudentPanel();
@@ -216,10 +226,19 @@ async function loadSections() {
         setStatus(`${sections.length} section${sections.length === 1 ? '' : 's'} loaded`);
     } catch (error) {
         sections = [];
+        sectionsLoadError = error.code === 'permission-denied'
+            ? 'Unable to load class sections: access was denied. Check your section membership and Firestore rules, then refresh.'
+            : error.message || 'Unable to load class sections. Please refresh to try again.';
         renderSections();
-        setStatus(error.message || 'Unable to load sections');
+        setStatus(sectionsLoadError);
         toast('Unable to load sections');
     }
+}
+
+function escapeHtml(value) {
+    const element = document.createElement('span');
+    element.textContent = value;
+    return element.innerHTML;
 }
 
 function renderSections() {
@@ -260,7 +279,7 @@ function renderSections() {
                 `).join('')}
             </tbody>
         </table>
-    ` : '<div class="empty-card">No class sections found.</div>';
+    ` : `<div class="empty-card"${sectionsLoadError ? ' role="alert"' : ''}>${escapeHtml(sectionsLoadError || 'No class sections found.')}</div>`;
 
     document.querySelectorAll('[data-students]').forEach(btn => {
         btn.addEventListener('click', () => openStudentPanel(btn.dataset.students));
