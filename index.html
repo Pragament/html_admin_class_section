@@ -168,7 +168,7 @@
                 </label>
                 <label class="field"><span>Admission Number</span><input id="studentAdmissionNo" autocomplete="off" /></label>
                 <label class="field"><span>School Email / Login Username</span><input id="studentEmail" type="email" autocomplete="off" /></label>
-                <label class="field"><span>Set / Reset Password</span><input id="studentPassword" type="password" minlength="8" maxlength="128" autocomplete="new-password" placeholder="Leave blank to keep current password" /></label>
+                <label class="field"><span>Set / Reset Password</span><input id="studentPassword" type="password" minlength="6" maxlength="128" autocomplete="new-password" placeholder="Leave blank to keep current password" /></label>
                 <label class="field">
                     <span>Phone</span>
                     <input id="studentPhone" autocomplete="off" placeholder="+91..." />
@@ -188,7 +188,7 @@
     <dialog id="bulkAccountsDialog" class="modal">
         <div class="modal-card">
             <div class="modal-head"><div><h2>Bulk Create Student Accounts</h2><p id="bulkAccountsSection"></p></div><button id="closeBulkAccountsBtn" class="btn" type="button">Close</button></div>
-            <p>Download the template for students without login accounts. Fill in each school email and an initial password of 8–128 characters, then import it here. Existing linked accounts are skipped; passwords are never displayed or stored in Firestore.</p>
+            <p>Download the template for students without login accounts. Fill in each school email and an initial password of 6–128 characters, then import it here. Existing linked accounts are skipped; passwords are never displayed or stored in Firestore.</p>
             <div class="action-bar">
                 <button id="accountTemplateBtn" class="btn" type="button">Download Account Template</button>
                 <label class="btn file-btn">Preview Account CSV<input id="accountCsvInput" type="file" accept=".csv,text/csv" /></label>
@@ -213,6 +213,6 @@
     </dialog>
 
     <div id="toast" class="toast"></div>
-    <script type="module" src="app.js?v=20261013.3"></script>
+    <script type="module" src="app.js?v=20261014.1"></script>
 </body>
 </html>

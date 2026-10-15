@@ -102,3 +102,11 @@ test('bulk creation saves email and profile, then skips linked accounts without 
     assert.equal(f.users.get(result.authUid).password, 'initialpassword');
     assert.equal(f.users.get(result.authUid).email, 'bulk@school.edu');
 });
+
+test('six-character passwords are accepted and shorter passwords are rejected', async () => {
+    const f = fixture();
+    await assert.rejects(f.service.manageStudentAccount(f.request({ password: '12345' })), { code: 'invalid-argument' });
+    assert.equal(f.users.size, 0);
+    const { authUid } = await f.service.manageStudentAccount(f.request({ password: '123456' }));
+    assert.equal(f.users.get(authUid).password, '123456');
+});

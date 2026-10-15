@@ -49,7 +49,7 @@ match /classSections/{sectionId}/students/{studentId} {
 }
 ```
 
-For each existing student, edit their school email and admission number and set a password (8–128 characters). Saving creates a Firebase Auth account and atomically links the roster and profile. Existing unrelated email accounts are rejected, never automatically adopted. Existing accounts can be linked only by a trusted operator who verifies identity and sets `authUid` on the roster.
+For each existing student, edit their school email and admission number and set a password (6–128 characters). Saving creates a Firebase Auth account and atomically links the roster and profile. Existing unrelated email accounts are rejected, never automatically adopted. Existing accounts can be linked only by a trusted operator who verifies identity and sets `authUid` on the roster.
 
 **Migrate Login Profiles** processes all students in the open section in pages of 100. It backfills profiles for linked accounts and reports students needing accounts and individual failures. It does not invent emails/passwords, delete old collections, or alter historical submissions. Rerunning is safe. Export a roster backup before migration. No production data migration has been executed by adding this feature.
 
@@ -75,6 +75,6 @@ id,email,password,admissionNo
 119,student119@school.edu,AnotherInitialPassword,119
 ```
 
-Fill in each email and an 8–128 character password. Use **Preview Account CSV**, review the student IDs, emails and validation results, then **Create Accounts**. All rows must pass validation before creation starts. Passwords are never shown in the preview or written to Firestore. This account CSV is distinct from the normal student import, which rejects passwords.
+Fill in each email and a 6–128 character password. Use **Preview Account CSV**, review the student IDs, emails and validation results, then **Create Accounts**. All rows must pass validation before creation starts. Passwords are never shown in the preview or written to Firestore. This account CSV is distinct from the normal student import, which rejects passwords.
 
 The CSV contains initial credentials; keep it private and delete it when no longer needed. The browser holds credentials in memory only while the dialog is in use and clears them on completion or close. Each request creates the account, links the existing roster document, and writes its login profile. Existing linked accounts are skipped on the server without resetting passwords. Accounts created successfully stay created if a later row fails. Quota, authorization, network and server failures stop processing. **Stop After Current Student** preserves completed work. Reload the CSV to retry remaining students; already linked accounts will be skipped. No extra migration is required after successful creation.

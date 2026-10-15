@@ -40,8 +40,8 @@ async function syncStudent(ref, student, actor, password) {
     const email = String(student.email || '').trim().toLowerCase();
     const admissionNo = String(student.admissionNo || ref.id).trim();
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new AccountError('invalid-argument', 'Enter a valid student email.');
-    if (password !== undefined && (typeof password !== 'string' || password.length < 8 || password.length > 128)) {
-        throw new AccountError('invalid-argument', 'Use a password of 8–128 characters.');
+    if (password !== undefined && (typeof password !== 'string' || password.length < 6 || password.length > 128)) {
+        throw new AccountError('invalid-argument', 'Use a password of 6–128 characters.');
     }
     // Stable UID makes retries recover an account created before a failed Firestore commit.
     const uid = student.authUid || `student_${createHash('sha256').update(ref.path).digest('hex').slice(0, 48)}`;

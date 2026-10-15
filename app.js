@@ -959,7 +959,7 @@ async function previewAccountCsv(event) {
             else if (student.authUid) message = 'Already linked — will skip';
             else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) message = 'Valid school email required';
             else if (emails.has(email)) message = 'Duplicate email';
-            else if (record.password.length < 8 || record.password.length > 128) message = 'Password must be 8–128 characters';
+            else if (record.password.length < 6 || record.password.length > 128) message = 'Password must be 6–128 characters';
             ids.add(id);
             if (!student?.authUid) emails.add(email);
             accountRows.push({ id, email, password: record.password, admissionNo: record.admissionno?.trim() || student?.admissionNo || id,
