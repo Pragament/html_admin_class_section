@@ -134,13 +134,34 @@ service cloud.firestore {
 
     // Taxonomy labels are shared metadata used by the teacher and student apps.
     match /qb_taxonomy_v1/{taxonomyId} {
-      allow read: if signedIn();
-      allow write: if false;
+      allow read: if true;
+      allow create, update: if signedIn()
+        && request.resource.data.type in ['class', 'subject', 'chapter', 'topic']
+        && request.resource.data.label is string;
+      allow delete: if false;
     }
 
     match /qb_questions_v1/{questionId} {
-      allow read: if activeStudent() && resource.data.status == 'published';
-      allow write: if false;
+      // Published questions are public in Question Bank Studio.
+      allow read: if resource.data.status == 'published'
+        || (signedIn() && resource.data.authorUid == request.auth.uid);
+      allow create: if signedIn()
+        && request.resource.data.authorUid == request.auth.uid;
+      allow update: if signedIn()
+        && resource.data.authorUid == request.auth.uid
+        && request.resource.data.authorUid == resource.data.authorUid;
+      allow delete: if false;
+    }
+
+    match /qb_reactions_v1/{reactionId} {
+      allow read: if true;
+
+      allow create, update: if signedIn()
+        && request.resource.data.userId == request.auth.uid
+        && reactionId == request.resource.data.questionId + '_' + request.auth.uid;
+
+      allow delete: if signedIn()
+        && resource.data.userId == request.auth.uid;
     }
 
     match /classSections/{sectionId} {
@@ -183,6 +204,34 @@ service cloud.firestore {
         && resource.data.ownerUid == request.auth.uid
         && request.resource.data.ownerUid == resource.data.ownerUid;
       allow delete: if signedIn() && resource.data.ownerUid == request.auth.uid;
+    }
+    
+    match /qb_reactions_v1/{reactionId} {
+      function validReactionSource(data) {
+        return data.sourceType is string && data.sourceValue is string
+          && ((data.sourceType == 'practice' && data.sourceValue == 'homepage')
+            || (data.sourceType == 'quiz-session'
+              && get(/databases/$(database)/documents/classrooms/$(data.sourceValue)).data.sectionId == profile().sectionId
+              && get(/databases/$(database)/documents/classrooms/$(data.sourceValue)).data.classEnabled == true
+              && get(/databases/$(database)/documents/classrooms/$(data.sourceValue)).data.get('archived', false) != true));
+      }
+      allow get: if activeStudent() && (resource == null || resource.data.userId == request.auth.uid);
+      allow list: if activeStudent() && resource.data.userId == request.auth.uid;
+      allow create, update: if activeStudent()
+        && request.resource.data.keys().hasAll(['questionId', 'userId', 'value', 'updatedAt', 'sourceType', 'sourceValue'])
+        && request.resource.data.keys().hasOnly(['questionId', 'userId', 'value', 'updatedAt', 'comment', 'sourceType', 'sourceValue'])
+        && validReactionSource(request.resource.data)
+        && request.resource.data.questionId is string
+        && request.resource.data.userId == request.auth.uid
+        && reactionId == request.resource.data.questionId + '__' + request.auth.uid
+        && (resource == null || (resource.data.userId == request.auth.uid
+          && resource.data.questionId == request.resource.data.questionId))
+        && request.resource.data.value in ['like', 'dislike']
+        && request.resource.data.updatedAt == request.time
+        && (!('comment' in request.resource.data)
+          || (request.resource.data.comment is string && request.resource.data.comment.size() <= 2000))
+        && get(/databases/$(database)/documents/qb_questions_v1/$(request.resource.data.questionId)).data.status == 'published';
+      allow delete: if false;
     }
 
     match /qb_quiz_submissions_v1/{submissionId} {
