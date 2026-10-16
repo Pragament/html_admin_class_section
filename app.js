@@ -1,3 +1,4 @@
+import { firebaseConfig } from './firebase-config.js';
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
 import {
     getAuth,
@@ -20,15 +21,6 @@ import {
     where
 } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
 
-const firebaseConfig = {
-    apiKey: 'AIzaSyAYlezFn0tSSQHA-vRnJeBfJ-Om1YlDghk',
-    authDomain: 'eschool-dev-4c6b4.firebaseapp.com',
-    projectId: 'eschool-dev-4c6b4',
-    storageBucket: 'eschool-dev-4c6b4.firebasestorage.app',
-    messagingSenderId: '875648503944',
-    appId: '1:875648503944:web:5423a89ccd19e06c6f0f3d',
-    measurementId: 'G-05GNVCMP1F'
-};
 
 const COLLECTIONS = {
     classSections: 'classSections',

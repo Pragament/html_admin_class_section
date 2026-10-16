@@ -18,3 +18,6 @@ node_modules/
 service-account*.json
 serviceAccount*.json
 *-firebase-adminsdk-*.json
+
+# Personal Firebase project override
+firebase-config.local.js

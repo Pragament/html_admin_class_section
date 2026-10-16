@@ -8,8 +8,20 @@ const { createStudentService, AccountError } = require('./functions/student-serv
 const PUBLIC_FILES = new Set([
     'index.html', 'app.js', 'styles.css', 'classrooms.html', 'classrooms.js',
     'students.html', 'students.js', 'submissions.html', 'submissions.js',
-    'questions.html', 'questions.js', 'taxonomy.html', 'taxonomy.js'
+    'questions.html', 'questions.js', 'taxonomy.html', 'taxonomy.js',
+    'firebase-config.js', 'firebase-config.local.js', 'copy-data.html', 'copy-data.js',
+    'question-filters.js'
 ]);
+const TEAM_PROJECT_ID = 'eschool-dev-4c6b4';
+// The pages use firebase-config.local.js when it exists, so the server must use that same project.
+async function expectedProjectId(root) {
+    try {
+        const config = await fs.readFile(path.join(root, 'firebase-config.local.js'), 'utf8');
+        return /projectId:\s*['"]([^'"]+)['"]/.exec(config)?.[1] || TEAM_PROJECT_ID;
+    } catch {
+        return TEAM_PROJECT_ID;
+    }
+}
 const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8' };
 const STATUS = { 'resource-exhausted': 429, unauthenticated: 401, 'permission-denied': 403, 'invalid-argument': 400, 'not-found': 404, 'failed-precondition': 409, 'already-exists': 409 };
 function json(res, status, data) {
@@ -90,7 +102,8 @@ async function start() {
     const relative = path.relative(repoPath, credentialPath);
     if (!relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative)) throw new Error('Move the service account JSON outside this repository.');
     const credentials = JSON.parse(await fs.readFile(credentialPath, 'utf8'));
-    if (credentials.type !== 'service_account' || credentials.project_id !== 'eschool-dev-4c6b4') throw new Error('Use a service account for the eschool-dev-4c6b4 Firebase project.');
+    const projectId = await expectedProjectId(__dirname);
+    if (credentials.type !== 'service_account' || credentials.project_id !== projectId) throw new Error(`Use a service account for the ${projectId} Firebase project.`);
     const { initializeApp, applicationDefault } = require('firebase-admin/app');
     const { getAuth } = require('firebase-admin/auth');
     const { getFirestore, FieldValue } = require('firebase-admin/firestore');

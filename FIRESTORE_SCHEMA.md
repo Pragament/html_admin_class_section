@@ -210,12 +210,13 @@ Admin-relevant fields:
   shortAnswerHtml: '<p>Model answer</p>',
   explanation: 'Teacher-facing explanation text',
   explanationUrl: 'https://example.com/explanation',
+  hints: ['First nudge for the student', 'Second, more specific nudge'],
   skill: 'Listening',
   actfl_level: 'Novice Low',
   actfl_sublevel: 'Low',
   actfl_mode: 'Interpretive',
   translations: {
-    Telugu: { question: '', options: [''], answer: '' }
+    Telugu: { question: '', options: [''], answer: '', explanation: '' }
   },
   authorUid: 'firebase-auth-uid',
   authorName: 'Teacher Name',
@@ -231,8 +232,9 @@ Admin moderation:
 - Bulk verified actions set `verified` to `true` or `false`.
 - Bulk delete hard deletes selected question documents after a detailed confirmation preview.
 - Questions can be filtered by `type`, and the correct answer column reads `options[].correct`, `shortAnswerHtml`, `trueAnswer`, or `fibBanks[].answers` depending on type.
-- Questions can be filtered by whether `explanation` is present or missing.
-- Questions can be filtered by whether `translations` contains one or more language entries, using the same entry check as the Translations table cell.
+- Questions can be filtered by whether `explanation` is present or missing, or by "With Hindi & Telugu translations" (English explanation plus `translations.Hindi.explanation` and `translations.Telugu.explanation`).
+- Questions can be filtered by whether `hints` has at least one non-blank hint.
+- Questions can be filtered by whether `translations` contains one or more language entries, using the same entry check as the Translations table cell (an `English` entry is not counted).
 - The Questions moderation page populates its SECTION filter from distinct, non-empty `sectionId` values in the loaded questions and combines the selected value with the other filters.
 - Questions can be filtered by whether `explanationUrl` is present or missing. When present, the admin table shows it as an external link.
 - Questions can be filtered and sorted by `skill`, `actfl_level`, `actfl_sublevel`, and `actfl_mode`.
@@ -241,6 +243,7 @@ Admin moderation:
 - `actfl_sublevel` stores `Low`, `Mid`, or `High`; leave blank for `Superior` or `Distinguished`.
 - `actfl_mode` stores `Interpersonal`, `Interpretive`, or `Presentational`.
 - Question CSV export labels these columns as `Explanations` and `Explanation URL`. Import normalizes headers, so `explanation`, `explanations`, `explanationUrl`, or `explanation_url` map to the same Firestore fields.
+- `hints` is an ordered list of student-facing hints. CSV export joins them with ` | ` under a `Hints` column; import splits on `|` (header `Hint` or `Hints`) and replaces the whole list.
 - Question CSV import/export also supports `skill`, `actfl_level`, `actfl_sublevel`, and `actfl_mode`. Import normalizes headers, so variants like `LSRW skill` and `actflLevel` are accepted.
 - The Student Records page reads `classId`, `subjectId`, `verified`, `options`, and `shortAnswerHtml` to label and filter submitted answers.
 

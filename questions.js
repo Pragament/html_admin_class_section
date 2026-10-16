@@ -1,3 +1,5 @@
+import { firebaseConfig } from './firebase-config.js';
+import { matchesExplanationFilter, matchesHintsFilter } from './question-filters.js';
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
 import {
     getAuth,
@@ -18,15 +20,6 @@ import {
     where
 } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
 
-const firebaseConfig = {
-    apiKey: 'AIzaSyAYlezFn0tSSQHA-vRnJeBfJ-Om1YlDghk',
-    authDomain: 'eschool-dev-4c6b4.firebaseapp.com',
-    projectId: 'eschool-dev-4c6b4',
-    storageBucket: 'eschool-dev-4c6b4.firebasestorage.app',
-    messagingSenderId: '875648503944',
-    appId: '1:875648503944:web:5423a89ccd19e06c6f0f3d',
-    measurementId: 'G-05GNVCMP1F'
-};
 
 const COLLECTIONS = {
     questions: 'qb_questions_v1',
@@ -57,6 +50,7 @@ const EXPORT_COLUMNS = [
     { key: 'correctAnswer', label: 'Correct Answer', value: question => correctAnswerText(question) },
     { key: 'explanation', label: 'Explanations', value: question => question.explanation || '' },
     { key: 'explanationUrl', label: 'Explanation URL', value: question => question.explanationUrl || '' },
+    { key: 'hints', label: 'Hints', value: question => hintsText(question) },
     { key: 'skill', label: 'skill', value: question => question.skill || '' },
     { key: 'actflLevel', label: 'actfl_level', value: question => question.actfl_level || '' },
     { key: 'actflSublevel', label: 'actfl_sublevel', value: question => question.actfl_sublevel || '' },
@@ -98,6 +92,11 @@ const IMPORT_COLUMNS = {
             if (text && !/^https?:\/\/\S+$/i.test(text)) throw new Error('must be a single http(s) link');
             return { explanationUrl: text };
         }
+    },
+    hints: {
+        label: 'Hints',
+        read: question => hintsText(question),
+        apply: (question, text) => ({ hints: text.split('|').map(hint => hint.trim()).filter(Boolean) })
     },
     skill: {
         label: 'Skill',
@@ -146,7 +145,33 @@ const IMPORT_COLUMNS = {
     }
 };
 IMPORT_COLUMNS.explanation = IMPORT_COLUMNS.explanations;
+IMPORT_COLUMNS.hint = IMPORT_COLUMNS.hints;
 IMPORT_COLUMNS.lsrwskill = IMPORT_COLUMNS.skill;
+
+// Per-language translation columns such as "Hindi Question" or "Telugu Options" (options split on |).
+// Blank cells are skipped so a partial file never clears stored translations; updates use field
+// paths so other languages and fields stay untouched.
+const TRANSLATION_LANGUAGES = ['Hindi', 'Telugu'];
+const TRANSLATION_FIELDS = {
+    question: { label: 'Question', read: value => value.question || value.prompt || '' },
+    options: {
+        label: 'Options',
+        read: value => Array.isArray(value.options) ? value.options.filter(option => cleanCell(option)).join(' | ') : '',
+        parse: text => text.split('|').map(option => option.trim()).filter(Boolean)
+    },
+    answer: { label: 'Answer', read: value => value.answer ?? value.correctAnswer ?? '' },
+    explanation: { label: 'Explanation', read: value => value.explanation || '' }
+};
+for (const language of TRANSLATION_LANGUAGES) {
+    for (const [field, config] of Object.entries(TRANSLATION_FIELDS)) {
+        IMPORT_COLUMNS[`${language}${field}`.toLowerCase()] = {
+            label: `${language} ${config.label}`,
+            skipBlank: true,
+            read: question => config.read(question.translations?.[language] || {}),
+            apply: (question, text) => ({ [`translations.${language}.${field}`]: config.parse ? config.parse(text) : text })
+        };
+    }
+}
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
@@ -187,11 +212,13 @@ const els = {
     searchInput: $('searchInput'),
     statusFilter: $('statusFilter'),
     typeFilter: $('typeFilter'),
+    difficultyFilter: $('difficultyFilter'),
     verifiedFilter: $('verifiedFilter'),
     explanationFilter: $('explanationFilter'),
     translationFilter: $('translationFilter'),
     sectionFilter: $('sectionFilter'),
     explanationUrlFilter: $('explanationUrlFilter'),
+    hintsFilter: $('hintsFilter'),
     skillFilter: $('skillFilter'),
     actflLevelFilter: $('actflLevelFilter'),
     actflSublevelFilter: $('actflSublevelFilter'),
@@ -260,11 +287,13 @@ function bindEvents() {
         els.searchInput,
         els.statusFilter,
         els.typeFilter,
+        els.difficultyFilter,
         els.verifiedFilter,
         els.explanationFilter,
         els.translationFilter,
         els.sectionFilter,
         els.explanationUrlFilter,
+        els.hintsFilter,
         els.skillFilter,
         els.actflLevelFilter,
         els.actflSublevelFilter,
@@ -355,6 +384,7 @@ function renderQuestions() {
                     ${sortHeader('translations', 'Translations')}
                     ${sortHeader('explanation', 'Explanations')}
                     ${sortHeader('explanationUrl', 'Explanation URL')}
+                    ${sortHeader('hints', 'Hints')}
                     ${sortHeader('skill', 'Skill')}
                     ${sortHeader('actflLevel', 'ACTFL Level')}
                     ${sortHeader('actflSublevel', 'ACTFL Sublevel')}
@@ -381,6 +411,7 @@ function renderQuestions() {
                             <td class="translations-cell">${translationsCell(question.translations)}</td>
                             <td><div class="explanation-cell">${esc(question.explanation || '')}</div></td>
                             <td>${explanationUrlCell(question.explanationUrl)}</td>
+                            <td>${hintsCell(question)}</td>
                             <td>${esc(question.skill || '')}</td>
                             <td>${esc(question.actfl_level || '')}</td>
                             <td>${esc(question.actfl_sublevel || '')}</td>
@@ -417,6 +448,7 @@ function translationsCell(translations) {
                     <div><span class="translation-label">Question:</span> ${esc(value.question || value.prompt || '') || '<em>Not provided</em>'}</div>
                     ${options.length ? `<div><span class="translation-label">Options:</span><ol>${options.map(option => `<li>${esc(option)}</li>`).join('')}</ol></div>` : ''}
                     <div><span class="translation-label">Answer:</span> ${esc(value.answer ?? value.correctAnswer ?? '') || '<em>Not provided</em>'}</div>
+                    <div><span class="translation-label">Explanation:</span> ${esc(value.explanation || '') || '<em>Not provided</em>'}</div>
                 </section>`;
             }).join('')}
         </div>
@@ -428,8 +460,8 @@ function translationEntries(translations) {
         return [];
     }
 
-    return Object.entries(translations).filter(([, value]) =>
-        value && typeof value === 'object'
+    return Object.entries(translations).filter(([language, value]) =>
+        value && typeof value === 'object' && language.trim().toLowerCase() !== 'english'
     );
 }
 
@@ -479,11 +511,13 @@ function filteredQuestions() {
     const search = els.searchInput.value.trim().toLowerCase();
     const status = els.statusFilter.value;
     const type = els.typeFilter.value;
+    const difficulty = els.difficultyFilter.value;
     const verified = els.verifiedFilter.value;
     const explanation = els.explanationFilter.value;
     const translation = els.translationFilter.value;
     const section = els.sectionFilter.value;
     const explanationUrl = els.explanationUrlFilter.value;
+    const hints = els.hintsFilter.value;
     const skill = els.skillFilter.value;
     const actflLevel = els.actflLevelFilter.value;
     const actflSublevel = els.actflSublevelFilter.value;
@@ -495,11 +529,13 @@ function filteredQuestions() {
         const counts = reactionCounts(question.id);
         if (status !== 'all' && question.status !== status) return false;
         if (type !== 'all' && question.type !== type) return false;
+        const questionDifficulty = String(question.difficulty || '').trim().toLowerCase();
+        if (difficulty === 'blank' && questionDifficulty) return false;
+        if (difficulty !== 'all' && difficulty !== 'blank' && questionDifficulty !== difficulty) return false;
         if (verified === 'verified' && !question.verified) return false;
         if (verified === 'unverified' && question.verified) return false;
-        const hasExplanation = Boolean(String(question.explanation || '').trim());
-        if (explanation === 'has' && !hasExplanation) return false;
-        if (explanation === 'missing' && hasExplanation) return false;
+        if (!matchesExplanationFilter(question, explanation)) return false;
+        if (!matchesHintsFilter(question, hints)) return false;
         const hasTranslations = translationEntries(question.translations).length > 0;
         if (translation === 'has' && !hasTranslations) return false;
         if (translation === 'missing' && hasTranslations) return false;
@@ -551,6 +587,7 @@ function sortValue(question, key) {
         correctAnswer: correctAnswerText(question),
         explanation: question.explanation || '',
         explanationUrl: question.explanationUrl || '',
+        hints: hintsText(question),
         skill: question.skill || '',
         actflLevel: question.actfl_level || '',
         actflSublevel: question.actfl_sublevel || '',
@@ -614,7 +651,7 @@ async function runPendingAction(event) {
                     updatedAt: serverTimestamp(),
                     updatedBy: currentUser.email || currentUser.uid
                 });
-                Object.assign(change.question, change.updates);
+                applyLocalUpdates(change.question, change.updates);
             }
             toast(`${pendingImport.length} question${pendingImport.length === 1 ? '' : 's'} updated from CSV`);
             pendingImport = [];
@@ -733,6 +770,7 @@ async function importCsv(event) {
                 if (index >= row.length) continue;
                 const text = cleanCell(row[index]);
                 const current = cleanCell(config.read(question));
+                if (!text && config.skipBlank) continue;
                 if (text === current || (config.caseInsensitive?.(question) && text.toLowerCase() === current.toLowerCase())) continue;
                 try {
                     Object.assign(updates, config.apply(question, text));
@@ -810,6 +848,20 @@ function correctAnswerUpdates(question, text) {
         };
     }
     throw new Error(`cannot edit answers for type "${question.type || 'unknown'}"`);
+}
+
+// Mirrors Firestore field-path updates ("translations.Hindi.answer") onto the local copy.
+function applyLocalUpdates(target, updates) {
+    for (const [path, value] of Object.entries(updates)) {
+        const keys = path.split('.');
+        const last = keys.pop();
+        let node = target;
+        for (const key of keys) {
+            if (!node[key] || typeof node[key] !== 'object' || Array.isArray(node[key])) node[key] = {};
+            node = node[key];
+        }
+        node[last] = value;
+    }
 }
 
 function cleanCell(value) {
@@ -925,6 +977,16 @@ function correctAnswerText(question) {
             .join('; ');
     }
     return '';
+}
+
+// Hints are stored as an ordered string array; CSV joins them with " | ".
+function hintsText(question) {
+    return Array.isArray(question.hints) ? question.hints.filter(hint => cleanCell(hint)).join(' | ') : '';
+}
+
+function hintsCell(question) {
+    const hints = Array.isArray(question.hints) ? question.hints.filter(hint => cleanCell(hint)) : [];
+    return hints.length ? `<ol class="explanation-cell">${hints.map(hint => `<li>${esc(hint)}</li>`).join('')}</ol>` : '';
 }
 
 function explanationUrlCell(url) {

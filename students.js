@@ -1,3 +1,4 @@
+import { firebaseConfig } from './firebase-config.js';
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
 import {
     getAuth,
@@ -12,15 +13,6 @@ import {
     getFirestore
 } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
 
-const firebaseConfig = {
-    apiKey: 'AIzaSyAYlezFn0tSSQHA-vRnJeBfJ-Om1YlDghk',
-    authDomain: 'eschool-dev-4c6b4.firebaseapp.com',
-    projectId: 'eschool-dev-4c6b4',
-    storageBucket: 'eschool-dev-4c6b4.firebasestorage.app',
-    messagingSenderId: '875648503944',
-    appId: '1:875648503944:web:5423a89ccd19e06c6f0f3d',
-    measurementId: 'G-05GNVCMP1F'
-};
 
 const COLLECTIONS = {
     questions: 'qb_questions_v1',
@@ -28,7 +20,7 @@ const COLLECTIONS = {
     submissions: 'qb_quiz_submissions_v1'
 };
 // Question class/subject/options rarely change, so they are cached to avoid re-reading every question on each visit.
-const QUESTION_CACHE_KEY = 'studentRecords.questionMeta.v2';
+const QUESTION_CACHE_KEY = `studentRecords.questionMeta.v2.${firebaseConfig.projectId}`;
 const QUESTION_CACHE_TTL = 12 * 60 * 60 * 1000;
 const PAGE_SIZE = 100;
 const ROMAN = { i: 1, ii: 2, iii: 3, iv: 4, v: 5, vi: 6, vii: 7, viii: 8, ix: 9, x: 10, xi: 11, xii: 12 };
