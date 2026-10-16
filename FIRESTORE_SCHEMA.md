@@ -210,6 +210,7 @@ Admin-relevant fields:
   shortAnswerHtml: '<p>Model answer</p>',
   explanation: 'Teacher-facing explanation text',
   explanationUrl: 'https://example.com/explanation',
+  explanationParameters: 'a=2&b=-5&c=3',
   hints: ['First nudge for the student', 'Second, more specific nudge'],
   skill: 'Listening',
   actfl_level: 'Novice Low',
@@ -234,15 +235,16 @@ Admin moderation:
 - Questions can be filtered by `type`, and the correct answer column reads `options[].correct`, `shortAnswerHtml`, `trueAnswer`, or `fibBanks[].answers` depending on type.
 - Questions can be filtered by whether `explanation` is present or missing, or by "With Hindi & Telugu translations" (English explanation plus `translations.Hindi.explanation` and `translations.Telugu.explanation`).
 - Questions can be filtered by whether `hints` has at least one non-blank hint.
-- Questions can be filtered by whether `translations` contains one or more language entries, using the same entry check as the Translations table cell (an `English` entry is not counted).
+- Questions can be filtered by complete translations: at least one non-English entry in `translations`, and every such entry has a `question` (or `prompt`), `answer` (or `correctAnswer`), and `explanation` (MCQ `options` are not required). Anything else counts as incomplete or missing.
 - The Questions moderation page populates its SECTION filter from distinct, non-empty `sectionId` values in the loaded questions and combines the selected value with the other filters.
-- Questions can be filtered by whether `explanationUrl` is present or missing. When present, the admin table shows it as an external link.
+- Questions can be filtered by whether `explanationUrl` is present or missing, or by "Has URL with parameters" (both `explanationUrl` and `explanationParameters` are non-blank). When present, the admin table shows it as an external link.
 - Questions can be filtered and sorted by `skill`, `actfl_level`, `actfl_sublevel`, and `actfl_mode`.
 - `skill` stores the LSRW skill. Supported admin filter/import values are `Listening`, `Speaking`, `Reading`, and `Writing`.
 - `actfl_level` stores the proficiency level. Supported admin filter/import values are `Novice Low`, `Novice Mid`, `Novice High`, `Intermediate Low`, `Intermediate Mid`, `Intermediate High`, `Advanced Low`, `Advanced Mid`, `Advanced High`, `Superior`, and `Distinguished`.
 - `actfl_sublevel` stores `Low`, `Mid`, or `High`; leave blank for `Superior` or `Distinguished`.
 - `actfl_mode` stores `Interpersonal`, `Interpretive`, or `Presentational`.
 - Question CSV export labels these columns as `Explanations` and `Explanation URL`. Import normalizes headers, so `explanation`, `explanations`, `explanationUrl`, or `explanation_url` map to the same Firestore fields.
+- `explanationParameters` is an optional query string for the explanation URL, stored without the leading `?` (for example `a=2&b=-5&c=3`). The admin table shows it in a `Parameters` column next to `Explanation URL`, without filtering or sorting, with an **Open** link that opens `explanationUrl` joined to the parameters with `?` (or `&` when the URL already has a query string). CSV export uses the `Parameters` header; import accepts `Parameters` or `explanationParameters`, strips a leading `?`, rejects values containing spaces, and a blank cell clears the field.
 - `hints` is an ordered list of student-facing hints. CSV export joins them with ` | ` under a `Hints` column; import splits on `|` (header `Hint` or `Hints`) and replaces the whole list.
 - Question CSV import/export also supports `skill`, `actfl_level`, `actfl_sublevel`, and `actfl_mode`. Import normalizes headers, so variants like `LSRW skill` and `actflLevel` are accepted.
 - The Student Records page reads `classId`, `subjectId`, `verified`, `options`, and `shortAnswerHtml` to label and filter submitted answers.
