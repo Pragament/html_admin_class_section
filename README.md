@@ -70,7 +70,9 @@ The questions page reads `qb_questions_v1` and `qb_reactions_v1`, computes like/
 
 Question moderation supports CSV import/export, table columns, filters, and sorting for `skill`, `actfl_level`, `actfl_sublevel`, and `actfl_mode`.
 
-Questions can be filtered by type (MCQ, short answer, fill in the blank, true/false), translation presence, and the distinct, non-empty `sectionId` values on loaded question documents. The Correct Answer column shows the answer already stored on each question: the option marked correct for MCQs, `shortAnswerHtml` for short answers, `trueAnswer` for true/false, and the accepted `fibBanks` answers for fill in the blank.
+A **Parameters** column next to Explanation URL shows `explanationParameters`, the query string for the explanation link (such as `a=2&b=-5`). Its **Open** link opens the explanation URL with the parameters applied. It is included in CSV import/export, with no filter or sorting.
+
+Questions can be filtered by type (MCQ, short answer, fill in the blank, true/false), complete translations (every language has its question, answer and explanation), and the distinct, non-empty `sectionId` values on loaded question documents. The Correct Answer column shows the answer already stored on each question: the option marked correct for MCQs, `shortAnswerHtml` for short answers, `trueAnswer` for true/false, and the accepted `fibBanks` answers for fill in the blank.
 
 ## Taxonomy Moderation
 

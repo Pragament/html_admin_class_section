@@ -1,5 +1,7 @@
 import { firebaseConfig } from './firebase-config.js';
-import { matchesExplanationFilter, matchesHintsFilter } from './question-filters.js';
+import {
+    matchesExplanationFilter, matchesHintsFilter, matchesTranslationFilter, translationEntries, translationOptions
+} from './question-filters.js';
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js';
 import {
     getAuth,
@@ -50,6 +52,7 @@ const EXPORT_COLUMNS = [
     { key: 'correctAnswer', label: 'Correct Answer', value: question => correctAnswerText(question) },
     { key: 'explanation', label: 'Explanations', value: question => question.explanation || '' },
     { key: 'explanationUrl', label: 'Explanation URL', value: question => question.explanationUrl || '' },
+    { key: 'explanationParameters', label: 'Parameters', value: question => question.explanationParameters || '' },
     { key: 'hints', label: 'Hints', value: question => hintsText(question) },
     { key: 'skill', label: 'skill', value: question => question.skill || '' },
     { key: 'actflLevel', label: 'actfl_level', value: question => question.actfl_level || '' },
@@ -91,6 +94,16 @@ const IMPORT_COLUMNS = {
         apply: (question, text) => {
             if (text && !/^https?:\/\/\S+$/i.test(text)) throw new Error('must be a single http(s) link');
             return { explanationUrl: text };
+        }
+    },
+    parameters: {
+        label: 'Parameters',
+        read: question => question.explanationParameters || '',
+        apply: (question, text) => {
+            // Stored without the leading "?" so it can be appended to the explanation URL.
+            const parameters = text.replace(/^\?/, '');
+            if (/\s/.test(parameters)) throw new Error('Parameters must be a query string without spaces, such as a=2&b=-5');
+            return { explanationParameters: parameters };
         }
     },
     hints: {
@@ -145,6 +158,7 @@ const IMPORT_COLUMNS = {
     }
 };
 IMPORT_COLUMNS.explanation = IMPORT_COLUMNS.explanations;
+IMPORT_COLUMNS.explanationparameters = IMPORT_COLUMNS.parameters;
 IMPORT_COLUMNS.hint = IMPORT_COLUMNS.hints;
 IMPORT_COLUMNS.lsrwskill = IMPORT_COLUMNS.skill;
 
@@ -384,6 +398,7 @@ function renderQuestions() {
                     ${sortHeader('translations', 'Translations')}
                     ${sortHeader('explanation', 'Explanations')}
                     ${sortHeader('explanationUrl', 'Explanation URL')}
+                    <th scope="col">Parameters</th>
                     ${sortHeader('hints', 'Hints')}
                     ${sortHeader('skill', 'Skill')}
                     ${sortHeader('actflLevel', 'ACTFL Level')}
@@ -408,9 +423,10 @@ function renderQuestions() {
                             <td><input type="checkbox" data-select-question="${esc(question.id)}" ${selectedQuestionIds.has(question.id) ? 'checked' : ''} /></td>
                             <td><div class="preview-snippet">${esc(questionText(question))}</div></td>
                             <td><div class="preview-snippet">${esc(correctAnswerText(question)) || '<em>No answer stored</em>'}</div></td>
-                            <td class="translations-cell">${translationsCell(question.translations)}</td>
+                            <td class="translations-cell">${translationsCell(question)}</td>
                             <td><div class="explanation-cell">${esc(question.explanation || '')}</div></td>
                             <td>${explanationUrlCell(question.explanationUrl)}</td>
+                            <td>${parametersCell(question)}</td>
                             <td>${hintsCell(question)}</td>
                             <td>${esc(question.skill || '')}</td>
                             <td>${esc(question.actfl_level || '')}</td>
@@ -434,15 +450,15 @@ function renderQuestions() {
     updateSelectionState();
 }
 
-function translationsCell(translations) {
-    const entries = translationEntries(translations);
+function translationsCell(question) {
+    const entries = translationEntries(question.translations);
     if (!entries.length) return '<span class="muted-text">No translations</span>';
 
     return `<details class="translation-details">
         <summary>${entries.length} language${entries.length === 1 ? '' : 's'}</summary>
         <div class="translation-list">
             ${entries.map(([language, value]) => {
-                const options = Array.isArray(value.options) ? value.options : [];
+                const options = translationOptions(value);
                 return `<section class="translation-item">
                     <strong>${esc(language)}</strong>
                     <div><span class="translation-label">Question:</span> ${esc(value.question || value.prompt || '') || '<em>Not provided</em>'}</div>
@@ -453,16 +469,6 @@ function translationsCell(translations) {
             }).join('')}
         </div>
     </details>`;
-}
-
-function translationEntries(translations) {
-    if (!translations || typeof translations !== 'object' || Array.isArray(translations)) {
-        return [];
-    }
-
-    return Object.entries(translations).filter(([language, value]) =>
-        value && typeof value === 'object' && language.trim().toLowerCase() !== 'english'
-    );
 }
 
 function sortHeader(key, label) {
@@ -536,13 +542,12 @@ function filteredQuestions() {
         if (verified === 'unverified' && question.verified) return false;
         if (!matchesExplanationFilter(question, explanation)) return false;
         if (!matchesHintsFilter(question, hints)) return false;
-        const hasTranslations = translationEntries(question.translations).length > 0;
-        if (translation === 'has' && !hasTranslations) return false;
-        if (translation === 'missing' && hasTranslations) return false;
+        if (!matchesTranslationFilter(question, translation)) return false;
         if (section !== 'all' && String(question.sectionId ?? '') !== section) return false;
         const hasExplanationUrl = Boolean(String(question.explanationUrl || '').trim());
         if (explanationUrl === 'has' && !hasExplanationUrl) return false;
         if (explanationUrl === 'missing' && hasExplanationUrl) return false;
+        if (explanationUrl === 'with-parameters' && !(hasExplanationUrl && String(question.explanationParameters || '').trim())) return false;
         if (skill !== 'all' && question.skill !== skill) return false;
         if (actflLevel !== 'all' && question.actfl_level !== actflLevel) return false;
         if (actflSublevel === 'blank' && String(question.actfl_sublevel || '').trim()) return false;
@@ -993,6 +998,17 @@ function explanationUrlCell(url) {
     const link = String(url || '').trim();
     if (!/^https?:\/\//i.test(link)) return esc(link);
     return `<a class="explanation-url" href="${esc(link)}" target="_blank" rel="noopener noreferrer" title="${esc(link)}">${esc(link)}</a>`;
+}
+
+// Shows the stored parameters plus an Open link that loads the explanation with them applied.
+function parametersCell(question) {
+    const parameters = String(question.explanationParameters || '').trim();
+    if (!parameters) return '';
+    const url = String(question.explanationUrl || '').trim();
+    const code = `<code class="parameters-code">${esc(parameters)}</code>`;
+    if (!/^https?:\/\//i.test(url)) return code;
+    const link = `${url}${url.includes('?') ? '&' : '?'}${parameters}`;
+    return `${code}<a class="open-parameters" href="${esc(link)}" target="_blank" rel="noopener noreferrer" title="${esc(link)}">Open &#8599;</a>`;
 }
 
 function questionText(question) {

@@ -33,3 +33,24 @@ test('hints filter ignores blank and non-array hints', async () => {
     assert.equal(matchesHintsFilter({}, 'missing'), true);
     assert.equal(matchesHintsFilter({}, 'all'), true);
 });
+
+test('translation filter needs every language to have question, answer and explanation', async () => {
+    const { matchesTranslationFilter } = await load();
+    const full = { question: 'प्रश्न', answer: 'उत्तर', explanation: 'व्याख्या' };
+    const complete = { type: 'short_answer', translations: { English: {}, Hindi: full, Telugu: { ...full, prompt: 'x', question: '' } } };
+    const missingQuestion = { type: 'short_answer', translations: { Hindi: { ...full, question: ' ' } } };
+    const oneIncomplete = { type: 'short_answer', translations: { Hindi: full, Telugu: { ...full, explanation: '' } } };
+    const mcqNoOptions = { type: 'mcq', translations: { Hindi: { ...full, options: ['', ' '] } } };
+    const mcqWithOptions = { type: 'mcq', translations: { Hindi: { ...full, options: ['क', 'ख'] } } };
+    const englishOnly = { type: 'short_answer', translations: { English: full } };
+
+    assert.equal(matchesTranslationFilter(complete, 'has'), true);
+    assert.equal(matchesTranslationFilter(missingQuestion, 'has'), false);
+    assert.equal(matchesTranslationFilter(oneIncomplete, 'has'), false);
+    assert.equal(matchesTranslationFilter(oneIncomplete, 'missing'), true);
+    assert.equal(matchesTranslationFilter(mcqNoOptions, 'has'), true);
+    assert.equal(matchesTranslationFilter(mcqWithOptions, 'has'), true);
+    assert.equal(matchesTranslationFilter(englishOnly, 'has'), false);
+    assert.equal(matchesTranslationFilter({}, 'missing'), true);
+    assert.equal(matchesTranslationFilter({}, 'all'), true);
+});

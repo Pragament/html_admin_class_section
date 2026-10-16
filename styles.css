@@ -397,6 +397,21 @@ a.btn,
     overflow-wrap: anywhere;
 }
 
+.parameters-code {
+    display: block;
+    width: 200px;
+    font-size: 12px;
+    overflow-wrap: anywhere;
+}
+
+.open-parameters {
+    display: inline-block;
+    margin-top: 6px;
+    color: var(--primary);
+    font-size: 12px;
+    font-weight: 800;
+}
+
 .records-head {
     display: flex;
     align-items: flex-start;
