@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>School Admin - Class Sections</title>
-    <link rel="stylesheet" href="styles.css?v=20260926.1" />
+    <link rel="stylesheet" href="styles.css?v=20261025.5" />
 </head>
 <body>
     <header class="topbar" id="topbar" hidden>
@@ -157,6 +157,10 @@
                 </div>
                 <button class="btn" id="cancelStudentBtn" type="button">Cancel</button>
             </div>
+            <label class="toggle-field">
+                <input id="studentLinkLogin" type="checkbox" checked />
+                <span>Link login account (email and password)</span>
+            </label>
             <div class="form-grid">
                 <label class="field">
                     <span>Student ID</span>
@@ -174,7 +178,7 @@
                     <input id="studentPhone" autocomplete="off" placeholder="+91..." />
                 </label>
             </div>
-            <p class="muted-text">Enter email and password to create a login account. Passwords are never saved in student records. Linked accounts are synchronized when saved.</p>
+            <p id="studentLoginHint" class="muted-text">Enter email and password to create a login account. Passwords are never saved in student records.</p>
             <label class="toggle-field">
                 <input id="studentEnabled" type="checkbox" checked />
                 <span>Enabled</span>
@@ -188,7 +192,10 @@
     <dialog id="bulkAccountsDialog" class="modal">
         <div class="modal-card">
             <div class="modal-head"><div><h2>Bulk Create Student Accounts</h2><p id="bulkAccountsSection"></p></div><button id="closeBulkAccountsBtn" class="btn" type="button">Close</button></div>
-            <p>Download the template for students without login accounts. Fill in each school email and an initial password of 6–128 characters, then import it here. Existing linked accounts are skipped; passwords are never displayed or stored in Firestore.</p>
+            <label class="field"><span>School Domain</span><input id="accountSchoolDomain" type="text" autocomplete="off" placeholder="dsssangareddy.com" /></label>
+            <p>Use existing student records: email is admission-number@school-domain (for example, 614@dsssangareddy.com). The initial password is the first 6 digits of the phone number, ignoring formatting.</p>
+            <div class="action-bar"><button id="previewExistingAccountsBtn" class="btn" type="button">Preview Existing Students</button></div>
+            <p>Or download the template for students without login accounts. Fill in each school email and an initial password of 6–128 characters, then import it here. Existing linked accounts are skipped; matching admission number and phone can link the same login to another section without changing its password; passwords are never displayed or stored in Firestore.</p>
             <div class="action-bar">
                 <button id="accountTemplateBtn" class="btn" type="button">Download Account Template</button>
                 <label class="btn file-btn">Preview Account CSV<input id="accountCsvInput" type="file" accept=".csv,text/csv" /></label>
@@ -213,6 +220,6 @@
     </dialog>
 
     <div id="toast" class="toast"></div>
-    <script type="module" src="app.js?v=20261014.1"></script>
+    <script type="module" src="app.js?v=20261025.5"></script>
 </body>
 </html>

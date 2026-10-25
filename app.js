@@ -115,6 +115,8 @@ const els = {
     studentId: $('studentId'),
     studentName: $('studentName'),
     studentPhone: $('studentPhone'),
+    studentLinkLogin: $('studentLinkLogin'),
+    studentLoginHint: $('studentLoginHint'),
     studentEmail: $('studentEmail'),
     studentAdmissionNo: $('studentAdmissionNo'),
     studentPassword: $('studentPassword'),
@@ -180,6 +182,7 @@ function bindEvents() {
     els.newStudentBtn.addEventListener('click', openCreateStudentDialog);
     els.cancelStudentBtn.addEventListener('click', () => els.studentDialog.close());
     els.studentForm.addEventListener('submit', saveStudent);
+    els.studentLinkLogin.addEventListener('change', updateStudentLoginFields);
     els.studentSearchInput.addEventListener('input', renderStudents);
     els.exportStudentsCsvBtn.addEventListener('click', exportStudentsCsv);
     els.studentTemplateBtn.addEventListener('click', downloadStudentTemplate);
@@ -695,6 +698,7 @@ function openCreateStudentDialog() {
     els.studentId.value = '';
     els.studentId.readOnly = false;
     els.studentEnabled.checked = true;
+    configureStudentLogin();
     renderStudentPanelHeader();
     els.studentDialog.showModal();
 }
@@ -713,8 +717,31 @@ function openEditStudentDialog(id) {
     els.studentAdmissionNo.value = student.admissionNo || student.id;
     els.studentPassword.value = '';
     els.studentEnabled.checked = student.enabled !== false;
+    configureStudentLogin(student);
     renderStudentPanelHeader();
     els.studentDialog.showModal();
+}
+
+function configureStudentLogin(student) {
+    els.studentLinkLogin.checked = true;
+    els.studentLinkLogin.disabled = Boolean(student?.authUid);
+    updateStudentLoginFields();
+}
+
+function updateStudentLoginFields() {
+    const linked = Boolean(students.find(student => student.id === editingStudentId)?.authUid);
+    const linkLogin = els.studentLinkLogin.checked;
+    els.studentEmail.disabled = !linkLogin;
+    els.studentEmail.required = linkLogin;
+    els.studentPassword.disabled = !linkLogin;
+    els.studentPassword.required = linkLogin && !linked;
+    els.studentPassword.placeholder = linked ? 'Leave blank to keep current password' : 'At least 6 characters';
+    if (!linkLogin) els.studentPassword.value = '';
+    els.studentLoginHint.textContent = linked
+        ? 'This student already has a linked login account. Email and enabled status stay synchronized; leave the password blank to keep it.'
+        : linkLogin
+            ? 'Enter email and password to create a login account. Passwords are never saved in student records.'
+            : 'Save student details without creating a login account.';
 }
 
 async function saveStudent(event) {
@@ -723,12 +750,15 @@ async function saveStudent(event) {
     if (!section) return;
     const id = els.studentId.value.trim();
     const data = studentFormData();
-    const password = els.studentPassword.value;
+    const linkLogin = els.studentLinkLogin.checked;
+    const password = linkLogin ? els.studentPassword.value : '';
     let savedId = editingStudentId || id;
     els.saveStudentBtn.disabled = true;
     try {
         if (id.includes('/')) throw new Error('Student ID cannot contain /');
-        if (password && !data.email) throw new Error('Email is required to create an account');
+        const linked = students.find(item => item.id === editingStudentId)?.authUid;
+        if (linkLogin && !data.email) throw new Error('Email is required to link a login account');
+        if (linkLogin && !linked && !password) throw new Error('Password is required to create a login account');
         if (editingStudentId) {
             const existingStudent = students.find(item => item.id === editingStudentId);
             if (existingStudent?.authUid) {
@@ -764,7 +794,7 @@ async function saveStudent(event) {
             toast('Student created');
         }
         const savedStudent = students.find(item => item.id === savedId);
-        if ((password || savedStudent?.authUid) && !savedStudent?.authUid) {
+        if (linkLogin && !savedStudent?.authUid) {
             await manageAccount({ sectionId: section.id, studentId: savedId, ...(password ? { password } : {}) });
             await loadStudents();
         }
@@ -926,7 +956,7 @@ function bindBulkAccountEvents() {
         accountSectionId = activeSectionId;
         accountRows = [];
         $('bulkAccountsSection').textContent = `Section: ${sectionLabel(activeSection())}`;
-        $('bulkAccountsStatus').textContent = 'Choose a CSV to preview.';
+        $('bulkAccountsStatus').textContent = 'Enter a school domain to use existing student records, or choose a CSV.';
         $('bulkAccountsPreview').innerHTML = '';
         $('runBulkAccountsBtn').disabled = true;
         $('bulkAccountsDialog').showModal();
@@ -940,11 +970,67 @@ function bindBulkAccountEvents() {
         students.filter(student => !student.authUid).forEach(student => rows.push([student.id, student.email || '', '', student.admissionNo || student.id]));
         downloadBlob(new Blob([toCsv(rows)], { type: 'text/csv;charset=utf-8' }), 'student-accounts-template.csv');
     });
+    $('previewExistingAccountsBtn').addEventListener('click', previewExistingAccounts);
+    $('accountSchoolDomain').addEventListener('input', () => {
+        if (bulkAccountBusy) return;
+        accountRows = [];
+        $('bulkAccountsPreview').innerHTML = '';
+        $('runBulkAccountsBtn').disabled = true;
+        $('bulkAccountsStatus').textContent = 'Preview accounts again after changing the school domain.';
+    });
     $('accountCsvInput').addEventListener('change', previewAccountCsv);
     $('runBulkAccountsBtn').addEventListener('click', createBulkAccounts);
 }
 
+function existingStudentAccountRows(students, schoolDomain) {
+    const domain = String(schoolDomain || '').trim().toLowerCase();
+    if (!/^(?=.{1,253}$)(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$/.test(domain)) {
+        throw new Error('Enter a school domain such as dsssangareddy.com (without @ or https://).');
+    }
+    const emails = new Set();
+    return students.map(student => {
+        const admissionNo = String(student.admissionNo || '').trim() || String(student.id || '').trim();
+        const email = `${admissionNo.toLowerCase()}@${domain}`;
+        const digits = String(student.phone || '').replace(/\D/g, '');
+        let message = '';
+        if (student.authUid) message = 'Already linked — will skip';
+        else if (!admissionNo) message = 'Admission number is missing';
+        else if (!/^[a-z0-9.!#$%&'*+/=?^_`{|}~-]+$/i.test(admissionNo)) message = 'Admission number cannot be used as an email username';
+        else if (email.length > 254 || admissionNo.length > 64) message = 'Generated email is too long';
+        else if (emails.has(email)) message = 'Duplicate generated email';
+        else if (digits.length < 6) message = 'Phone must contain at least 6 digits';
+        if (!student.authUid) emails.add(email);
+        return {
+            id: student.id, admissionNo, email: student.authUid ? student.email || '' : email,
+            password: !student.authUid && !message ? digits.slice(0, 6) : '',
+            name: student.studentName || student.name || student.id,
+            status: student.authUid ? 'skip' : message ? 'invalid' : 'ready', message
+        };
+    });
+}
+
+function previewExistingAccounts() {
+    if (bulkAccountBusy || !accountSectionId || accountSectionId !== activeSectionId) return;
+    accountRows = [];
+    $('runBulkAccountsBtn').disabled = true;
+    try {
+        accountRows = existingStudentAccountRows(students, $('accountSchoolDomain').value);
+        if (!accountRows.length) throw new Error('This section has no student records.');
+        renderAccountPreview();
+        const ready = accountRows.filter(row => row.status === 'ready').length;
+        const invalid = accountRows.filter(row => row.status === 'invalid').length;
+        const skipped = accountRows.filter(row => row.status === 'skip').length;
+        $('bulkAccountsStatus').textContent = `${ready} ready; ${invalid} invalid; ${skipped} already linked. Initial passwords use the first 6 phone digits. ${invalid ? 'Correct invalid student records, then preview again.' : ''}`;
+        $('runBulkAccountsBtn').disabled = invalid > 0 || ready === 0;
+    } catch (error) {
+        accountRows = [];
+        $('bulkAccountsPreview').innerHTML = '';
+        $('bulkAccountsStatus').textContent = error.message;
+    }
+}
+
 async function previewAccountCsv(event) {
+    if (bulkAccountBusy) return;
     const file = event.target.files?.[0];
     event.target.value = '';
     accountRows = [];
@@ -1001,6 +1087,8 @@ async function createBulkAccounts() {
     $('closeBulkAccountsBtn').disabled = true;
     $('accountCsvInput').disabled = true;
     $('accountTemplateBtn').disabled = true;
+    $('previewExistingAccountsBtn').disabled = true;
+    $('accountSchoolDomain').disabled = true;
     $('stopBulkAccountsBtn').hidden = false;
     $('stopBulkAccountsBtn').disabled = false;
     const sectionId = accountSectionId;
@@ -1010,10 +1098,12 @@ async function createBulkAccounts() {
             if (row.status !== 'ready') { row.password = ''; continue; }
             $('bulkAccountsStatus').textContent = `Creating account for student ${row.id}…`;
             try {
-                const result = await manageAccount({ sectionId, studentId: row.id, createOnly: true, password: row.password,
+                const result = await manageAccount({ sectionId, studentId: row.id, createOnly: true, linkExisting: true, password: row.password,
                     student: { email: row.email, admissionNo: row.admissionNo } });
-                row.status = result.data.status === 'skipped' ? 'skip' : 'created';
-                row.message = row.status === 'skip' ? 'Already linked — skipped' : 'Account and login profile created';
+                row.status = result.data.status === 'skipped' ? 'skip' : result.data.status === 'linked' ? 'linked' : 'created';
+                row.message = row.status === 'skip' ? 'Already linked — skipped'
+                    : result.data.status === 'linked' ? 'Existing login linked to this section; password unchanged'
+                    : 'Account and login profile created';
             } catch (error) {
                 row.status = 'failed';
                 row.message = error.message || 'Account creation failed';
@@ -1024,11 +1114,13 @@ async function createBulkAccounts() {
         }
     } finally {
         accountRows.forEach(row => { row.password = ''; });
-        $('bulkAccountsStatus').textContent = `${accountRows.filter(row => row.status === 'created').length} created; ${accountRows.filter(row => row.status === 'skip').length} skipped; ${accountRows.filter(row => row.status === 'failed').length} failed; ${accountRows.filter(row => row.status === 'ready').length} not processed. Reload the CSV to retry remaining students.`;
+        $('bulkAccountsStatus').textContent = `${accountRows.filter(row => row.status === 'created').length} created; ${accountRows.filter(row => row.status === 'linked').length} linked to existing accounts; ${accountRows.filter(row => row.status === 'skip').length} skipped; ${accountRows.filter(row => row.status === 'failed').length} failed; ${accountRows.filter(row => row.status === 'ready').length} not processed. Preview existing records again or reload the CSV to retry remaining students.`;
         bulkAccountBusy = false;
         $('closeBulkAccountsBtn').disabled = false;
         $('accountCsvInput').disabled = false;
         $('accountTemplateBtn').disabled = false;
+        $('previewExistingAccountsBtn').disabled = false;
+        $('accountSchoolDomain').disabled = false;
         $('stopBulkAccountsBtn').hidden = true;
         if (activeSectionId === sectionId) await loadStudents();
     }

@@ -10,7 +10,12 @@ function fixture() {
     let failCommit = false;
     const ref = path => ({ path, id: path.split('/').at(-1), parent: { parent: { id: path.split('/')[1] } },
         get: async () => ({ exists: records.has(path), data: () => records.get(path) }) });
-    const db = { doc: ref, batch: () => {
+    const db = { doc: ref, runTransaction: async run => {
+        const writes = [];
+        const result = await run({ get: r => r.get(), set: (r, data) => writes.push([r.path, data]) });
+        for (const [path, data] of writes) records.set(path, { ...records.get(path), ...data });
+        return result;
+    }, batch: () => {
         const writes = [];
         return { set: (r, data) => writes.push([r.path, data]), commit: async () => {
             if (failCommit) { failCommit = false; throw new Error('commit failed'); }
@@ -19,7 +24,15 @@ function fixture() {
     } };
     const auth = {
         getUser: async uid => { if (!users.has(uid)) throw Object.assign(new Error(), { code: 'auth/user-not-found' }); return users.get(uid); },
-        createUser: async data => { users.set(data.uid, data); },
+        getUserByEmail: async email => {
+            const user = [...users.values()].find(user => user.email === email);
+            if (!user) throw Object.assign(new Error(), { code: 'auth/user-not-found' });
+            return user;
+        },
+        createUser: async data => {
+            if ([...users.values()].some(user => user.email === data.email)) throw Object.assign(new Error(), { code: 'auth/email-already-exists' });
+            users.set(data.uid, data);
+        },
         updateUser: async (uid, data) => { users.set(uid, { ...users.get(uid), ...data }); },
         revokeRefreshTokens: async uid => { users.get(uid).revoked = true; }
     };
@@ -109,4 +122,73 @@ test('six-character passwords are accepted and shorter passwords are rejected', 
     assert.equal(f.users.size, 0);
     const { authUid } = await f.service.manageStudentAccount(f.request({ password: '123456' }));
     assert.equal(f.users.get(authUid).password, '123456');
+});
+
+test('email conflict identifies the existing student and section without claiming the account', async () => {
+    const f = fixture();
+    f.records.set('studentProfiles/existing', { sectionId: 'other', studentDocId: '755', studentName: 'Profile Name' });
+    f.records.set('classSections/other', { sectionName: 'Grade 8 A' });
+    f.records.set('classSections/other/students/755', { studentName: 'Existing Student' });
+    const service = createStudentService({
+        db: { doc: path => ({ path, id: path.split('/').at(-1), parent: { parent: { id: 'section' } },
+            get: async () => ({ exists: f.records.has(path), data: () => f.records.get(path) }) }) },
+        auth: {
+            getUser: async () => { throw Object.assign(new Error(), { code: 'auth/user-not-found' }); },
+            createUser: async () => { throw Object.assign(new Error(), { code: 'auth/email-already-exists' }); },
+            getUserByEmail: async email => {
+                assert.equal(email, 'student@school.edu');
+                return { uid: 'existing', displayName: 'Auth Name' };
+            }
+        }, timestamp: () => 'timestamp'
+    });
+    await assert.rejects(service.manageStudentAccount(f.request({ password: '123456' })), error => {
+        assert.equal(error.code, 'already-exists');
+        assert.match(error.message, /Existing student: Existing Student/);
+        assert.match(error.message, /Section: Grade 8 A \(ID: other\)/);
+        return true;
+    });
+    assert.equal(f.records.get('classSections/section/students/student').authUid, undefined);
+    await assert.rejects(service.manageStudentAccount({ auth: { uid: 'outsider', token: {} }, data: {} }), { code: 'permission-denied' });
+});
+
+test('one login links matching students across sections without resetting password or losing the first membership', async () => {
+    const f = fixture();
+    f.records.get('classSections/section/students/student').phone = '9666033404';
+    const first = await f.service.manageStudentAccount(f.request({ password: 'original-password' }));
+    f.records.set('classSections/second/students/102', { studentName: 'Student', phone: '96660 33404', enabled: true });
+    const secondRequest = f.request({ sectionId: 'second', studentId: '102', createOnly: true, linkExisting: true,
+        password: '966603', student: { email: 'student@school.edu', admissionNo: '102' } });
+    const second = await f.service.manageStudentAccount(secondRequest);
+    assert.equal(second.status, 'linked');
+    assert.equal(second.authUid, first.authUid);
+    assert.equal(f.users.size, 1);
+    assert.equal(f.users.get(first.authUid).password, 'original-password');
+    const profile = f.records.get(`studentProfiles/${first.authUid}`);
+    assert.equal(profile.sectionId, 'section');
+    assert.equal(profile.memberships.section.active, true);
+    assert.equal(profile.memberships.second.studentKey, 'second_102');
+    assert.equal(f.records.get('classSections/second/students/102').authUid, first.authUid);
+    assert.equal((await f.service.manageStudentAccount(secondRequest)).status, 'skipped');
+    await f.service.manageStudentAccount(f.request({ sectionId: 'second', studentId: '102', student: { enabled: false } }));
+    assert.equal(f.users.get(first.authUid).disabled, false);
+    assert.equal(f.records.get(`studentProfiles/${first.authUid}`).memberships.second.active, false);
+    assert.equal(f.records.get(`studentProfiles/${first.authUid}`).memberships.section.active, true);
+});
+
+test('cross-section linking rejects mismatched identity and accounts without student profiles', async () => {
+    const f = fixture();
+    f.records.get('classSections/section/students/student').phone = '9666033404';
+    await f.service.manageStudentAccount(f.request({ password: 'original-password' }));
+    f.records.set('classSections/second/students/102', { phone: '1111111111' });
+    const request = f.request({ sectionId: 'second', studentId: '102', createOnly: true, linkExisting: true,
+        password: '111111', student: { email: 'student@school.edu', admissionNo: '102' } });
+    await assert.rejects(f.service.manageStudentAccount(request), /does not match/);
+    assert.equal(f.records.get('classSections/second/students/102').authUid, undefined);
+    f.records.get('classSections/second/students/102').phone = '9666033404';
+    request.data.student.admissionNo = 'wrong';
+    await assert.rejects(f.service.manageStudentAccount(request), /does not match/);
+    f.users.set('unrelated', { uid: 'unrelated', email: 'other@school.edu' });
+    request.data.student.email = 'other@school.edu';
+    await assert.rejects(f.service.manageStudentAccount(request), /no student profile/);
+    assert.equal(f.users.get('unrelated').password, undefined);
 });

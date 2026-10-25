@@ -32,7 +32,7 @@ body {
 }
 
 body::before {
-    content: "v2026.09.26.1";
+    content: "v2026.10.25.5";
     position: fixed;
     top: 6px;
     left: 6px;

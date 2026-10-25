@@ -141,6 +141,24 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    // Passages become public when first used by a published question.
+    // Keep them readable for other published questions when one child is archived.
+    match /qb_comprehensions_v1/{comprehensionId} {
+      allow read: if resource.data.published == true
+        || (signedIn() && resource.data.authorUid == request.auth.uid);
+      allow create: if signedIn()
+        && request.resource.data.authorUid == request.auth.uid
+        && request.resource.data.passageHtml is string
+        && request.resource.data.published is bool;
+      allow update: if signedIn()
+        && resource.data.authorUid == request.auth.uid
+        && request.resource.data.authorUid == resource.data.authorUid
+        && request.resource.data.passageHtml is string
+        && request.resource.data.published is bool
+        && (resource.data.published == false || request.resource.data.published == true);
+      allow delete: if false;
+    }
+
     match /qb_questions_v1/{questionId} {
       // Published questions are public in Question Bank Studio.
       allow read: if resource.data.status == 'published'
@@ -168,6 +186,34 @@ service cloud.firestore {
       allow read: if canViewSection(resource.data);
       allow create: if isSchoolAdmin();
       allow update, delete: if isSchoolAdmin() || canAdminSection(resource.data);
+
+      match /aiConfigs/{configId} {
+        function sectionMember() {
+          return signedIn() && canViewSection(get(/databases/$(database)/documents/classSections/$(sectionId)).data);
+        }
+        function validConfig() {
+          let data = request.resource.data;
+          return data.keys().hasAll(['name', 'provider', 'apiKey', 'baseURL', 'models', 'authorUid', 'createdAt', 'updatedAt'])
+            && data.keys().hasOnly(['name', 'provider', 'apiKey', 'baseURL', 'models', 'authorUid', 'createdAt', 'updatedAt'])
+            && data.name is string && data.name.size() > 0 && data.name.size() <= 100
+            && data.apiKey is string && data.apiKey.size() > 0 && data.apiKey.size() <= 4096
+            && data.models is list && data.models.size() > 0 && data.models.size() <= 6
+            && data.models.toSet().size() == data.models.size()
+            && data.updatedAt == request.time && data.createdAt is timestamp
+            && ((data.provider == 'gemini'
+                && data.baseURL == 'https://generativelanguage.googleapis.com/v1beta/openai/'
+                && data.models.hasOnly(['gemini-3.8-flash', 'gemini-3.8-pro', 'gemini-2.5-flash', 'gemini-2.5-pro']))
+              || (data.provider == 'pollinations'
+                && data.baseURL == 'https://gen.pollinations.ai/v1'
+                && data.models.hasOnly(['openai/gpt-5.4-nano', 'openai/gpt-6-luna', 'openai/gpt-6-sol', 'google/gemini-4-argon', 'anthropic/claude-sonnet-5.5', 'deepseek/deepseek-v4.1-flash'])));
+        }
+        allow read, delete: if sectionMember() && resource.data.authorUid == request.auth.uid;
+        allow create: if sectionMember() && request.resource.data.authorUid == request.auth.uid
+          && request.resource.data.createdAt == request.time && validConfig();
+        allow update: if sectionMember() && resource.data.authorUid == request.auth.uid
+          && request.resource.data.authorUid == resource.data.authorUid
+          && request.resource.data.createdAt == resource.data.createdAt && validConfig();
+      }
 
       match /students/{studentId} {
         allow read: if exists(/databases/$(database)/documents/classSections/$(sectionId))
@@ -232,6 +278,14 @@ service cloud.firestore {
           || (request.resource.data.comment is string && request.resource.data.comment.size() <= 2000))
         && get(/databases/$(database)/documents/qb_questions_v1/$(request.resource.data.questionId)).data.status == 'published';
       allow delete: if false;
+    }
+
+    // Merge this read grant with existing student reaction write permissions.
+    match /qb_reactions_v1/{reactionId} {
+      allow read: if signedIn()
+        && resource.data.sourceType == 'quiz-session'
+        && (ownsClassroom(resource.data.sourceValue)
+          || canAdminClassroomSection(get(/databases/$(database)/documents/classrooms/$(resource.data.sourceValue)).data));
     }
 
     match /qb_quiz_submissions_v1/{submissionId} {
