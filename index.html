@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>School Admin - Class Sections</title>
-    <link rel="stylesheet" href="styles.css?v=20261025.5" />
+    <link rel="stylesheet" href="styles.css?v=20261026.1" />
 </head>
 <body>
     <header class="topbar" id="topbar" hidden>
@@ -63,6 +63,14 @@
                     <label class="field search-field">
                         <span>Search</span>
                         <input id="searchInput" type="search" placeholder="Section, class, id" />
+                    </label>
+                    <label class="field compact-field">
+                        <span>Status</span>
+                        <select id="sectionStatusFilter">
+                            <option value="enabled" selected>Enabled</option>
+                            <option value="disabled">Disabled</option>
+                            <option value="all">All</option>
+                        </select>
                     </label>
                     <span class="count-chip" id="sectionCount">0</span>
                 </div>
@@ -191,7 +199,7 @@
 
     <dialog id="bulkAccountsDialog" class="modal">
         <div class="modal-card">
-            <div class="modal-head"><div><h2>Bulk Create Student Accounts</h2><p id="bulkAccountsSection"></p></div><button id="closeBulkAccountsBtn" class="btn" type="button">Close</button></div>
+            <div class="modal-head"><div><h2>Bulk Student Accounts</h2><p id="bulkAccountsSection"></p></div><button id="closeBulkAccountsBtn" class="btn" type="button">Close</button></div>
             <label class="field"><span>School Domain</span><input id="accountSchoolDomain" type="text" autocomplete="off" placeholder="dsssangareddy.com" /></label>
             <p>Use existing student records: email is admission-number@school-domain (for example, 614@dsssangareddy.com). The initial password is the first 6 digits of the phone number, ignoring formatting.</p>
             <div class="action-bar"><button id="previewExistingAccountsBtn" class="btn" type="button">Preview Existing Students</button></div>
@@ -200,6 +208,8 @@
                 <button id="accountTemplateBtn" class="btn" type="button">Download Account Template</button>
                 <label class="btn file-btn">Preview Account CSV<input id="accountCsvInput" type="file" accept=".csv,text/csv" /></label>
             </div>
+            <p>Reset passwords for linked students in this section to the first 6 phone digits. This changes the shared login password across all their sections and signs out existing sessions.</p>
+            <div class="action-bar"><button id="previewPasswordResetsBtn" class="btn" type="button">Preview Password Resets</button></div>
             <p id="bulkAccountsStatus" role="status" aria-live="polite"></p>
             <div id="bulkAccountsPreview" class="table-wrap"></div>
             <div class="form-actions"><button id="runBulkAccountsBtn" class="btn primary" type="button" disabled>Create Accounts</button><button id="stopBulkAccountsBtn" class="btn" type="button" hidden>Stop After Current Student</button></div>
@@ -220,6 +230,6 @@
     </dialog>
 
     <div id="toast" class="toast"></div>
-    <script type="module" src="app.js?v=20261025.5"></script>
+    <script type="module" src="app.js?v=20261026.1"></script>
 </body>
 </html>

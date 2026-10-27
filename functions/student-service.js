@@ -149,6 +149,28 @@ async function manageStudentAccount(request) {
     const ref = studentRef(data);
     const snap = await ref.get();
     if (!snap.exists) throw new AccountError('not-found', 'Save the student first.');
+    if (data.resetPasswordFromPhone === true) {
+        const student = snap.data();
+        if (!student.authUid) throw new AccountError('failed-precondition', 'Student has no linked login account.');
+        const password = String(student.phone || '').replace(/\D/g, '').slice(0, 6);
+        if (password.length < 6) throw new AccountError('invalid-argument', 'Phone must contain at least 6 digits.');
+        const profile = await db.doc(`studentProfiles/${segment(student.authUid)}`).get();
+        const membership = profile.exists && profileMemberships(profile.data())[data.sectionId];
+        if (!membership || membership.studentDocId !== ref.id) {
+            throw new AccountError('failed-precondition', 'Login profile is not linked to this student in this section.');
+        }
+        try {
+            // Update credentials only: preserve email, account state and all section memberships.
+            await auth.updateUser(student.authUid, { password });
+            await auth.revokeRefreshTokens(student.authUid);
+        } catch (cause) {
+            const error = new AccountError(cause.code === 'auth/user-not-found' ? 'not-found' : 'internal',
+                cause.code === 'auth/user-not-found' ? 'Linked login account was not found.' : 'Password reset could not complete. Retry this student.');
+            error.cause = cause;
+            throw error;
+        }
+        return { authUid: student.authUid, status: 'reset' };
+    }
     // Bulk creation must never reset an already linked account.
     if (data.createOnly === true && snap.data().authUid) return { authUid: snap.data().authUid, status: 'skipped' };
     try {

@@ -192,3 +192,31 @@ test('cross-section linking rejects mismatched identity and accounts without stu
     await assert.rejects(f.service.manageStudentAccount(request), /no student profile/);
     assert.equal(f.users.get('unrelated').password, undefined);
 });
+
+test('bulk password reset uses the stored first six phone digits and preserves account/profile fields', async () => {
+    const f = fixture();
+    f.records.get('classSections/section/students/student').phone = '012 345-6789';
+    const { authUid } = await f.service.manageStudentAccount(f.request({ password: 'old-password' }));
+    const profileBefore = structuredClone(f.records.get(`studentProfiles/${authUid}`));
+    const rosterBefore = structuredClone(f.records.get('classSections/section/students/student'));
+    const userBefore = structuredClone(f.users.get(authUid));
+    const result = await f.service.manageStudentAccount(f.request({ resetPasswordFromPhone: true,
+        password: 'client-password', student: { phone: '999999', email: 'different@school.edu', enabled: false } }));
+    assert.equal(result.status, 'reset');
+    assert.deepEqual(f.users.get(authUid), { ...userBefore, password: '012345', revoked: true });
+    assert.deepEqual(f.records.get(`studentProfiles/${authUid}`), profileBefore);
+    assert.deepEqual(f.records.get('classSections/section/students/student'), rosterBefore);
+    assert.ok([...f.records.values()].every(record => !Object.hasOwn(record, 'password')));
+});
+
+test('bulk password reset rejects unauthorized, unlinked, short-phone and mismatched-profile students', async () => {
+    const f = fixture();
+    await assert.rejects(f.service.manageStudentAccount({ auth: { uid: 'other', token: {} }, data: { resetPasswordFromPhone: true } }), { code: 'permission-denied' });
+    await assert.rejects(f.service.manageStudentAccount(f.request({ resetPasswordFromPhone: true })), /no linked login/);
+    const { authUid } = await f.service.manageStudentAccount(f.request({ password: 'old-password' }));
+    await assert.rejects(f.service.manageStudentAccount(f.request({ resetPasswordFromPhone: true })), /at least 6 digits/);
+    f.records.get('classSections/section/students/student').phone = '9666033404';
+    f.records.set(`studentProfiles/${authUid}`, { sectionId: 'other', studentDocId: 'other', active: true });
+    await assert.rejects(f.service.manageStudentAccount(f.request({ resetPasswordFromPhone: true })), /not linked/);
+    assert.equal(f.users.get(authUid).password, 'old-password');
+});

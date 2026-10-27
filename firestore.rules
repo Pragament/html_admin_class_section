@@ -16,18 +16,33 @@ service cloud.firestore {
         && profile().authUid == request.auth.uid;
     }
 
+    // Use section-specific identities while retaining legacy single-section profiles.
+    function sectionMembership(sectionId) {
+      return profile().get('memberships', {}).get(sectionId, {
+        'studentDocId': profile().get('studentDocId', ''),
+        'admissionNo': profile().get('admissionNo', ''),
+        'studentKey': profile().get('studentKey', ''),
+        'active': sectionId == profile().get('sectionId', '') && profile().active == true
+      });
+    }
+
+    function activeSection(sectionId) {
+      return activeStudent() && sectionMembership(sectionId).active == true;
+    }
+
     function submissionOwner(data) {
       return data.authUid == request.auth.uid
         && data.email == request.auth.token.email
-        && data.studentKey == profile().studentKey
-        && data.sectionId == profile().sectionId
-        && data.admissionNo == profile().admissionNo
+        && activeSection(data.sectionId)
+        && data.studentKey == sectionMembership(data.sectionId).studentKey
+        && data.admissionNo == sectionMembership(data.sectionId).admissionNo
         && data.answers is list && data.questionCount is int;
     }
 
     function submissionClassroom(data) {
       let classroom = get(/databases/$(database)/documents/classrooms/$(data.classroomId)).data;
-      return classroom.sectionId == profile().sectionId
+      return classroom.sectionId == data.sectionId
+        && activeSection(classroom.sectionId)
         && classroom.classEnabled == true && classroom.get('archived', false) != true;
     }
 
@@ -227,7 +242,7 @@ service cloud.firestore {
     }
 
     match /classrooms/{classroomId} {
-      allow read: if activeStudent() && resource.data.sectionId == profile().sectionId;
+      allow read: if activeStudent() && activeSection(resource.data.sectionId);
       allow read: if signedIn()
         && (resource.data.creatorId == request.auth.uid || canAdminClassroomSection(resource.data));
       allow create: if signedIn()
@@ -257,7 +272,7 @@ service cloud.firestore {
         return data.sourceType is string && data.sourceValue is string
           && ((data.sourceType == 'practice' && data.sourceValue == 'homepage')
             || (data.sourceType == 'quiz-session'
-              && get(/databases/$(database)/documents/classrooms/$(data.sourceValue)).data.sectionId == profile().sectionId
+              && activeSection(get(/databases/$(database)/documents/classrooms/$(data.sourceValue)).data.sectionId)
               && get(/databases/$(database)/documents/classrooms/$(data.sourceValue)).data.classEnabled == true
               && get(/databases/$(database)/documents/classrooms/$(data.sourceValue)).data.get('archived', false) != true));
       }
@@ -297,7 +312,11 @@ service cloud.firestore {
 
       allow update: if canReviewSubmission(resource.data) && isAiReviewUpdate();
       // Also permits the student's historical submissions without authUid.
-      allow read: if activeStudent() && resource.data.studentKey == profile().studentKey;
+      allow read: if activeStudent()
+        && ((resource.data.get('sectionId', '') != ''
+            && activeSection(resource.data.sectionId)
+            && resource.data.studentKey == sectionMembership(resource.data.sectionId).studentKey)
+          || (activeSection(profile().sectionId) && resource.data.studentKey == profile().studentKey));
       allow create: if activeStudent()
         && submissionOwner(request.resource.data) && submissionClassroom(request.resource.data)
         && (!request.resource.data.get('practiceProgress', false) || validPracticeDraft(request.resource.data));

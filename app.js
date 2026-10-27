@@ -82,6 +82,7 @@ const els = {
     sectionTemplateBtn: $('sectionTemplateBtn'),
     csvInput: $('csvInput'),
     searchInput: $('searchInput'),
+    sectionStatusFilter: $('sectionStatusFilter'),
     sectionCount: $('sectionCount'),
     sectionTableWrap: $('sectionTableWrap'),
     studentPanel: $('studentPanel'),
@@ -174,6 +175,7 @@ function bindEvents() {
     els.addMemberBtn.addEventListener('click', () => addMemberRow());
     els.memberList.addEventListener('click', handleMemberListClick);
     els.searchInput.addEventListener('input', renderSections);
+    els.sectionStatusFilter.addEventListener('change', renderSections);
     els.exportCsvBtn.addEventListener('click', exportSectionsCsv);
     els.sectionTemplateBtn.addEventListener('click', downloadSectionTemplate);
     els.csvInput.addEventListener('change', importSectionsCsv);
@@ -289,8 +291,12 @@ function renderSections() {
 
 function filteredSections() {
     const search = els.searchInput.value.trim().toLowerCase();
-    if (!search) return sections;
+    const status = els.sectionStatusFilter.value;
     return sections.filter(section => {
+        const enabled = section.enabled !== false;
+        if (status === 'enabled' && !enabled) return false;
+        if (status === 'disabled' && enabled) return false;
+        if (!search) return true;
         return [section.id, section.sectionName, section.name, section.className, section.title, serializeMembers(section.members)]
             .some(value => String(value || '').toLowerCase().includes(search));
     });
@@ -946,6 +952,7 @@ function studentCsvData(record) {
 }
 
 let accountRows = [];
+let accountOperation = 'create';
 let accountSectionId = null;
 let bulkAccountBusy = false;
 let stopBulkAccounts = false;
@@ -954,6 +961,7 @@ function bindBulkAccountEvents() {
     $('bulkAccountsBtn').addEventListener('click', () => {
         if (!activeSectionId) return;
         accountSectionId = activeSectionId;
+        setAccountOperation('create');
         accountRows = [];
         $('bulkAccountsSection').textContent = `Section: ${sectionLabel(activeSection())}`;
         $('bulkAccountsStatus').textContent = 'Enter a school domain to use existing student records, or choose a CSV.';
@@ -971,8 +979,9 @@ function bindBulkAccountEvents() {
         downloadBlob(new Blob([toCsv(rows)], { type: 'text/csv;charset=utf-8' }), 'student-accounts-template.csv');
     });
     $('previewExistingAccountsBtn').addEventListener('click', previewExistingAccounts);
+    $('previewPasswordResetsBtn').addEventListener('click', previewPasswordResets);
     $('accountSchoolDomain').addEventListener('input', () => {
-        if (bulkAccountBusy) return;
+        if (bulkAccountBusy || accountOperation === 'reset') return;
         accountRows = [];
         $('bulkAccountsPreview').innerHTML = '';
         $('runBulkAccountsBtn').disabled = true;
@@ -980,6 +989,38 @@ function bindBulkAccountEvents() {
     });
     $('accountCsvInput').addEventListener('change', previewAccountCsv);
     $('runBulkAccountsBtn').addEventListener('click', createBulkAccounts);
+}
+
+function setAccountOperation(operation) {
+    accountOperation = operation;
+    $('runBulkAccountsBtn').textContent = operation === 'reset' ? 'Reset Passwords' : 'Create Accounts';
+}
+
+function passwordResetRows(students) {
+    const accounts = new Set();
+    return students.map(student => {
+        const digits = String(student.phone || '').replace(/\D/g, '');
+        let status = 'ready';
+        let message = 'Ready to reset to first 6 phone digits';
+        if (!student.authUid) { status = 'skip'; message = 'No linked login account — will skip'; }
+        else if (accounts.has(student.authUid)) { status = 'skip'; message = 'Same login already included — will skip'; }
+        else if (digits.length < 6) { status = 'invalid'; message = 'Phone must contain at least 6 digits'; }
+        else accounts.add(student.authUid);
+        return { id: student.id, name: student.studentName || student.name || student.id,
+            email: student.email || '', status, message };
+    });
+}
+
+function previewPasswordResets() {
+    if (bulkAccountBusy || !accountSectionId || accountSectionId !== activeSectionId) return;
+    setAccountOperation('reset');
+    accountRows = passwordResetRows(students);
+    renderAccountPreview();
+    const ready = accountRows.filter(row => row.status === 'ready').length;
+    const invalid = accountRows.filter(row => row.status === 'invalid').length;
+    const skipped = accountRows.filter(row => row.status === 'skip').length;
+    $('bulkAccountsStatus').textContent = `${ready} ready to reset; ${invalid} invalid; ${skipped} skipped. ${invalid ? 'Correct invalid phone numbers and preview again.' : 'Review the students, then click Reset Passwords. Shared logins change across all sections.'}`;
+    $('runBulkAccountsBtn').disabled = invalid > 0 || ready === 0;
 }
 
 function existingStudentAccountRows(students, schoolDomain) {
@@ -1011,6 +1052,7 @@ function existingStudentAccountRows(students, schoolDomain) {
 
 function previewExistingAccounts() {
     if (bulkAccountBusy || !accountSectionId || accountSectionId !== activeSectionId) return;
+    setAccountOperation('create');
     accountRows = [];
     $('runBulkAccountsBtn').disabled = true;
     try {
@@ -1031,6 +1073,7 @@ function previewExistingAccounts() {
 
 async function previewAccountCsv(event) {
     if (bulkAccountBusy) return;
+    setAccountOperation('create');
     const file = event.target.files?.[0];
     event.target.value = '';
     accountRows = [];
@@ -1089,19 +1132,23 @@ async function createBulkAccounts() {
     $('accountTemplateBtn').disabled = true;
     $('previewExistingAccountsBtn').disabled = true;
     $('accountSchoolDomain').disabled = true;
+    $('previewPasswordResetsBtn').disabled = true;
     $('stopBulkAccountsBtn').hidden = false;
     $('stopBulkAccountsBtn').disabled = false;
     const sectionId = accountSectionId;
+    const resetting = accountOperation === 'reset';
     try {
         for (const row of accountRows) {
             if (stopBulkAccounts) break;
             if (row.status !== 'ready') { row.password = ''; continue; }
-            $('bulkAccountsStatus').textContent = `Creating account for student ${row.id}…`;
+            $('bulkAccountsStatus').textContent = `${resetting ? 'Resetting password' : 'Creating account'} for student ${row.id}…`;
             try {
-                const result = await manageAccount({ sectionId, studentId: row.id, createOnly: true, linkExisting: true, password: row.password,
-                    student: { email: row.email, admissionNo: row.admissionNo } });
-                row.status = result.data.status === 'skipped' ? 'skip' : result.data.status === 'linked' ? 'linked' : 'created';
-                row.message = row.status === 'skip' ? 'Already linked — skipped'
+                const result = await manageAccount(resetting
+                    ? { sectionId, studentId: row.id, resetPasswordFromPhone: true }
+                    : { sectionId, studentId: row.id, createOnly: true, linkExisting: true, password: row.password,
+                        student: { email: row.email, admissionNo: row.admissionNo } });
+                row.status = resetting ? 'reset' : result.data.status === 'skipped' ? 'skip' : result.data.status === 'linked' ? 'linked' : 'created';
+                row.message = resetting ? 'Password reset to first 6 phone digits; existing sessions revoked' : row.status === 'skip' ? 'Already linked — skipped'
                     : result.data.status === 'linked' ? 'Existing login linked to this section; password unchanged'
                     : 'Account and login profile created';
             } catch (error) {
@@ -1114,13 +1161,14 @@ async function createBulkAccounts() {
         }
     } finally {
         accountRows.forEach(row => { row.password = ''; });
-        $('bulkAccountsStatus').textContent = `${accountRows.filter(row => row.status === 'created').length} created; ${accountRows.filter(row => row.status === 'linked').length} linked to existing accounts; ${accountRows.filter(row => row.status === 'skip').length} skipped; ${accountRows.filter(row => row.status === 'failed').length} failed; ${accountRows.filter(row => row.status === 'ready').length} not processed. Preview existing records again or reload the CSV to retry remaining students.`;
+        $('bulkAccountsStatus').textContent = `${accountRows.filter(row => row.status === 'reset').length} passwords reset; ${accountRows.filter(row => row.status === 'created').length} created; ${accountRows.filter(row => row.status === 'linked').length} linked to existing accounts; ${accountRows.filter(row => row.status === 'skip').length} skipped; ${accountRows.filter(row => row.status === 'failed').length} failed; ${accountRows.filter(row => row.status === 'ready').length} not processed. Preview again or reload the CSV to retry remaining students.`;
         bulkAccountBusy = false;
         $('closeBulkAccountsBtn').disabled = false;
         $('accountCsvInput').disabled = false;
         $('accountTemplateBtn').disabled = false;
         $('previewExistingAccountsBtn').disabled = false;
         $('accountSchoolDomain').disabled = false;
+        $('previewPasswordResetsBtn').disabled = false;
         $('stopBulkAccountsBtn').hidden = true;
         if (activeSectionId === sectionId) await loadStudents();
     }

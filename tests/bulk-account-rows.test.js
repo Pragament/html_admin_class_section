@@ -45,3 +45,16 @@ test('student ID supplies a missing admission number and preserves leading zeros
     assert.equal(rows[0].password, '987654');
     assert.equal(rows[0].status, 'ready');
 });
+
+test('password reset preview skips unlinked and duplicate logins, flags short phones, and hides passwords', () => {
+    const resetHelper = source.slice(source.indexOf('function passwordResetRows('), source.indexOf('function previewPasswordResets('));
+    const resetRows = new Function(`${resetHelper}; return passwordResetRows;`)();
+    const rows = resetRows([
+        { id: '755', authUid: 'shared', email: '755@school.edu', phone: '9666033404' },
+        { id: 'other', authUid: 'shared', phone: '9666033404' },
+        { id: 'unlinked', phone: '9876543210' },
+        { id: 'short', authUid: 'short-phone', phone: '12345' }
+    ]);
+    assert.deepEqual(rows.map(row => row.status), ['ready', 'skip', 'skip', 'invalid']);
+    assert.ok(rows.every(row => !Object.hasOwn(row, 'password')));
+});
