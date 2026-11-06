@@ -122,3 +122,7 @@ Alternatively, **Bulk Create Accounts** downloads a CSV template for unlinked st
 
 
 **Bulk password resets:** open **Bulk Create Accounts**, click **Preview Password Resets**, review the linked students, then click **Reset Passwords**. No CSV or school domain is needed. Passwords use the first six digits of each saved phone number, ignoring formatting and preserving leading zeros. Students without linked accounts are skipped; phones with fewer than six digits block the run until corrected. A shared account is reset once in the preview. The backend reads the current phone and checks the linked section profile, updates only the Firebase Auth password, and revokes refresh tokens. The shared password changes for every section using that login. No passwords are displayed or written to Firestore. Restart `npm start` after updating the backend. Previewing does not reset any accounts.
+
+## School organisations and branches
+
+Use [Organisations](organisations.html) and [Branches](branches.html) to manage school structure. Assign existing sections to branches from Edit Section. New student IDs use `BRANCHCODE-ADMISSIONNUMBER`, and student CSV import verifies that exact format. Codes and per-branch admissions are enforced transactionally by the local admin API. See [school structure setup, schema and migration notes](SCHOOL_STRUCTURE.md) before publishing the new rules.

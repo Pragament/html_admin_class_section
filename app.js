@@ -29,7 +29,7 @@ const COLLECTIONS = {
 
 const ADMIN_EMAILS = [];
 const MEMBER_ROLES = ['viewer', 'admin'];
-const CSV_COLUMNS = ['id', 'sectionName', 'className', 'title', 'sortOrder', 'enabled', 'members'];
+const CSV_COLUMNS = ['branchId', 'id', 'sectionName', 'className', 'title', 'sortOrder', 'enabled', 'members'];
 const STUDENT_CSV_COLUMNS = ['id', 'studentName', 'phone', 'enabled', 'email', 'admissionNo'];
 
 const app = initializeApp(firebaseConfig);
@@ -46,7 +46,7 @@ async function callStudentApi(operation, data) {
     });
     let result;
     try { result = await response.json(); }
-    catch { throw new Error('Start the local admin server with npm start to use student account controls.'); }
+    catch { throw new Error('Start the local admin server with npm start to use school and student controls.'); }
     if (!response.ok) {
         const error = new Error(result.error?.message || 'Student account request failed.');
         error.code = result.error?.code;
@@ -59,6 +59,7 @@ const migrateProfiles = data => callStudentApi('migrateStudentProfiles', data);
 
 let currentUser = null;
 let sections = [];
+let schoolBranches = [];
 let sectionsLoadError = '';
 let students = [];
 let activeSectionId = null;
@@ -83,6 +84,7 @@ const els = {
     csvInput: $('csvInput'),
     searchInput: $('searchInput'),
     sectionStatusFilter: $('sectionStatusFilter'),
+    sectionBranchFilter: $('sectionBranchFilter'),
     sectionCount: $('sectionCount'),
     sectionTableWrap: $('sectionTableWrap'),
     studentPanel: $('studentPanel'),
@@ -101,6 +103,7 @@ const els = {
     sectionDialogTitle: $('sectionDialogTitle'),
     sectionId: $('sectionId'),
     sectionName: $('sectionName'),
+    sectionBranch: $('sectionBranch'),
     className: $('className'),
     title: $('title'),
     sortOrder: $('sortOrder'),
@@ -176,6 +179,7 @@ function bindEvents() {
     els.memberList.addEventListener('click', handleMemberListClick);
     els.searchInput.addEventListener('input', renderSections);
     els.sectionStatusFilter.addEventListener('change', renderSections);
+    els.sectionBranchFilter.addEventListener('change', renderSections);
     els.exportCsvBtn.addEventListener('click', exportSectionsCsv);
     els.sectionTemplateBtn.addEventListener('click', downloadSectionTemplate);
     els.csvInput.addEventListener('change', importSectionsCsv);
@@ -184,6 +188,7 @@ function bindEvents() {
     els.newStudentBtn.addEventListener('click', openCreateStudentDialog);
     els.cancelStudentBtn.addEventListener('click', () => els.studentDialog.close());
     els.studentForm.addEventListener('submit', saveStudent);
+    els.studentAdmissionNo.addEventListener('input', updateStudentId);
     els.studentLinkLogin.addEventListener('change', updateStudentLoginFields);
     els.studentSearchInput.addEventListener('input', renderStudents);
     els.exportStudentsCsvBtn.addEventListener('click', exportStudentsCsv);
@@ -211,10 +216,15 @@ async function loadSections() {
     try {
         const email = String(currentUser.email || '').toLowerCase();
         if (!email) throw new Error('Your signed-in account needs an email address to view class sections.');
-        const snap = await getDocs(query(
+        const [snap, branches] = await Promise.all([getDocs(query(
             collection(db, COLLECTIONS.classSections),
             where('members', 'array-contains-any', MEMBER_ROLES.map(role => ({ email, role })))
-        ));
+        )), getDocs(collection(db, 'schoolBranches'))]);
+        schoolBranches = branches.docs.map(d => ({ ...d.data(), id: d.id }));
+        els.sectionBranch.innerHTML = '<option value="">Choose branch</option>' + schoolBranches.map(branch => `<option value="${esc(branch.id)}">${esc(branch.name)} (${esc(branch.id)}) · ${esc(branch.orgId)}</option>`).join('');
+        const selectedBranch = els.sectionBranchFilter.value;
+        els.sectionBranchFilter.innerHTML = '<option value="all">All branches</option><option value="unassigned">Unassigned sections</option>' + schoolBranches.map(branch => `<option value="${esc(branch.id)}">${esc(branch.name)} (${esc(branch.id)})</option>`).join('');
+        els.sectionBranchFilter.value = [...els.sectionBranchFilter.options].some(option => option.value === selectedBranch) ? selectedBranch : 'all';
         sections = snap.docs.map(d => ({ id: d.id, ...d.data() })).sort(compareSections);
         if (activeSectionId && !sections.some(section => section.id === activeSectionId)) {
             closeStudentPanel();
@@ -258,7 +268,7 @@ function renderSections() {
             <tbody>
                 ${visible.map(section => `
                     <tr>
-                        <td><strong>${esc(sectionLabel(section))}</strong></td>
+                        <td><strong>${esc(sectionLabel(section))}</strong><div class="muted-text">${esc(section.branchId || 'No branch assigned')}</div></td>
                         <td>${esc(section.className || '')}</td>
                         <td>${esc(section.title || '')}</td>
                         <td>${esc(section.sortOrder ?? '')}</td>
@@ -293,6 +303,8 @@ function filteredSections() {
     const search = els.searchInput.value.trim().toLowerCase();
     const status = els.sectionStatusFilter.value;
     return sections.filter(section => {
+        const branch = els.sectionBranchFilter.value;
+        if (branch === 'unassigned' ? Boolean(section.branchId) : branch !== 'all' && section.branchId !== branch) return false;
         const enabled = section.enabled !== false;
         if (status === 'enabled' && !enabled) return false;
         if (status === 'disabled' && enabled) return false;
@@ -307,6 +319,8 @@ function openCreateDialog() {
     els.saveSectionBtn.textContent = 'Create Section';
     els.sectionForm.reset();
     els.sectionId.value = '';
+    els.sectionBranch.disabled = false;
+    els.sectionBranch.value = '';
     els.sectionEnabled.checked = true;
     renderMemberRows([]);
     els.sectionDialog.showModal();
@@ -318,6 +332,8 @@ function openEditDialog(id) {
     els.sectionDialogTitle.textContent = `Edit ${sectionLabel(section)}`;
     els.saveSectionBtn.textContent = 'Save Section';
     els.sectionId.value = section.id;
+    els.sectionBranch.value = section.branchId || '';
+    els.sectionBranch.disabled = Boolean(section.branchId);
     els.sectionName.value = section.sectionName || section.name || '';
     els.className.value = section.className || '';
     els.title.value = section.title || '';
@@ -332,28 +348,11 @@ async function saveSection(event) {
     const id = els.sectionId.value;
     const data = sectionFormData();
     try {
-        if (id) {
-            await updateDoc(doc(db, COLLECTIONS.classSections, id), {
-                ...data,
-                updatedAt: serverTimestamp(),
-                updatedBy: currentUser.email || currentUser.uid
-            });
-            const section = sections.find(item => item.id === id);
-            if (section) Object.assign(section, data);
-            toast('Section updated');
-        } else {
-            const createdDate = Date.now();
-            const newRef = await addDoc(collection(db, COLLECTIONS.classSections), {
-                ...data,
-                createdDate,
-                createdAt: serverTimestamp(),
-                updatedAt: serverTimestamp(),
-                createdBy: currentUser.email || currentUser.uid,
-                updatedBy: currentUser.email || currentUser.uid
-            });
-            sections.push({ id: newRef.id, ...data, createdDate });
-            toast('Section created');
-        }
+        const response = await callStudentApi('saveSchoolSection', { sectionId: id || undefined, section: data });
+        const section = sections.find(item => item.id === id);
+        if (section) Object.assign(section, data, response.data);
+        else sections.push({ ...data, ...response.data });
+        toast(id ? 'Section updated' : 'Section created');
         sections.sort(compareSections);
         els.sectionDialog.close();
         renderSections();
@@ -368,6 +367,7 @@ function sectionFormData() {
     const sectionName = els.sectionName.value.trim();
     return {
         sectionName,
+        branchId: els.sectionBranch.value,
         name: sectionName,
         className: els.className.value.trim(),
         title: els.title.value.trim(),
@@ -383,7 +383,7 @@ function openDeleteDialog(id) {
     pendingDeleteId = id;
     pendingDeleteType = 'section';
     els.confirmTitle.textContent = 'Delete Section?';
-    els.confirmText.textContent = `This will delete ${sectionLabel(section)}. Student documents under this section are not deleted by this app.`;
+    els.confirmText.textContent = `This will delete ${sectionLabel(section)}. Sections with students must be disabled instead of deleted.`;
     els.confirmDialog.showModal();
 }
 
@@ -399,7 +399,7 @@ async function deleteConfirmed(event) {
 async function deleteSection() {
     if (!pendingDeleteId) return;
     try {
-        await deleteDoc(doc(db, COLLECTIONS.classSections, pendingDeleteId));
+        await callStudentApi('deleteSchoolSection', { sectionId: pendingDeleteId });
         sections = sections.filter(section => section.id !== pendingDeleteId);
         if (activeSectionId === pendingDeleteId) closeStudentPanel();
         pendingDeleteId = null;
@@ -416,7 +416,7 @@ function exportSectionsCsv() {
     const rows = [CSV_COLUMNS];
     filteredSections().forEach(section => {
         rows.push([
-            section.id,
+            section.branchId || '', section.id,
             section.sectionName || section.name || '',
             section.className || '',
             section.title || '',
@@ -431,7 +431,7 @@ function exportSectionsCsv() {
 function downloadSectionTemplate() {
     downloadBlob(new Blob([toCsv([
         CSV_COLUMNS,
-        ['', 'DSS grade 8', 'Grade 8', 'Display title', '0', 'true', 'teacher@example.com:admin;viewer@example.com:viewer']
+        ['BRANCHCODE', '', 'DSS grade 8', 'Grade 8', 'Display title', '0', 'true', 'teacher@example.com:admin;viewer@example.com:viewer']
     ])], { type: 'text/csv;charset=utf-8' }), 'class-sections-template.csv');
 }
 
@@ -454,22 +454,7 @@ async function importSectionsCsv(event) {
             if (!data.sectionName) continue;
             if (record.password) throw new Error('Passwords must be set in the student form, not imported from CSV.');
             const id = String(record.id || '').trim();
-            if (id) {
-                await setDoc(doc(db, COLLECTIONS.classSections, id), {
-                    ...data,
-                    updatedAt: serverTimestamp(),
-                    updatedBy: currentUser.email || currentUser.uid
-                }, { merge: true });
-            } else {
-                await addDoc(collection(db, COLLECTIONS.classSections), {
-                    ...data,
-                    createdDate: Date.now(),
-                    createdAt: serverTimestamp(),
-                    updatedAt: serverTimestamp(),
-                    createdBy: currentUser.email || currentUser.uid,
-                    updatedBy: currentUser.email || currentUser.uid
-                });
-            }
+            await callStudentApi('saveSchoolSection', { sectionId: id || undefined, section: { ...data, ...(record.branchid ? { branchId: record.branchid } : {}) } });
             imported += 1;
         }
         toast(`${imported} section${imported === 1 ? '' : 's'} imported`);
@@ -697,13 +682,16 @@ function openCreateStudentDialog() {
         toast('Choose a section first');
         return;
     }
+    if (!section.branchId) { toast('Edit this section and assign a school branch first.'); return; }
     els.studentDialogTitle.textContent = 'New Student';
     els.saveStudentBtn.textContent = 'Create Student';
     els.studentForm.reset();
     editingStudentId = null;
     els.studentId.value = '';
-    els.studentId.readOnly = false;
+    els.studentId.readOnly = true;
+    els.studentAdmissionNo.readOnly = false;
     els.studentEnabled.checked = true;
+    updateStudentId();
     configureStudentLogin();
     renderStudentPanelHeader();
     els.studentDialog.showModal();
@@ -717,6 +705,7 @@ function openEditStudentDialog(id) {
     editingStudentId = student.id;
     els.studentId.value = student.id;
     els.studentId.readOnly = true;
+    els.studentAdmissionNo.readOnly = Boolean(activeSection()?.branchId);
     els.studentName.value = student.studentName || student.name || '';
     els.studentPhone.value = student.phone || '';
     els.studentEmail.value = student.email || '';
@@ -726,6 +715,13 @@ function openEditStudentDialog(id) {
     configureStudentLogin(student);
     renderStudentPanelHeader();
     els.studentDialog.showModal();
+}
+
+function updateStudentId() {
+    if (editingStudentId) return;
+    const branchCode = activeSection()?.branchCode || activeSection()?.branchId;
+    const admission = els.studentAdmissionNo.value.trim().toUpperCase();
+    els.studentId.value = branchCode && admission ? `${branchCode}-${admission}` : '';
 }
 
 function configureStudentLogin(student) {
@@ -765,40 +761,16 @@ async function saveStudent(event) {
         const linked = students.find(item => item.id === editingStudentId)?.authUid;
         if (linkLogin && !data.email) throw new Error('Email is required to link a login account');
         if (linkLogin && !linked && !password) throw new Error('Password is required to create a login account');
-        if (editingStudentId) {
-            const existingStudent = students.find(item => item.id === editingStudentId);
-            if (existingStudent?.authUid) {
-                await manageAccount({ sectionId: section.id, studentId: editingStudentId, student: data, ...(password ? { password } : {}) });
-            } else {
-                await updateDoc(studentDocRef(editingStudentId), {
-                    ...data, updatedAt: serverTimestamp(), updatedBy: currentUser.email || currentUser.uid
-                });
-            }
-            if (existingStudent) Object.assign(existingStudent, data);
-            toast('Student updated');
-        } else {
-            if (id && students.some(item => item.id === id)) {
-                throw new Error('A student with this ID already exists');
-            }
-            const createdDate = Date.now();
-            const payload = {
-                ...data,
-                createdDate,
-                createdAt: serverTimestamp(),
-                updatedAt: serverTimestamp(),
-                createdBy: currentUser.email || currentUser.uid,
-                updatedBy: currentUser.email || currentUser.uid
-            };
-            if (id) {
-                await setDoc(studentDocRef(id), payload);
-                students.push({ id, ...data, createdDate });
-            } else {
-                const newRef = await addDoc(studentCollectionRef(), payload);
-                savedId = newRef.id;
-                students.push({ id: newRef.id, ...data, createdDate });
-            }
-            toast('Student created');
-        }
+        if (!section.branchId) throw new Error('Edit this section and assign a school branch before adding students.');
+        const response = linked
+            ? await manageAccount({ sectionId: section.id, studentId: editingStudentId, student: data, ...(password ? { password } : {}) })
+            : await callStudentApi('saveSchoolStudent', { sectionId: section.id,
+                studentId: editingStudentId || id, create: !editingStudentId, student: data });
+        savedId = response.data.id || editingStudentId;
+        const existingStudent = students.find(item => item.id === savedId);
+        if (existingStudent) Object.assign(existingStudent, data, response.data);
+        else students.push({ id: savedId, ...data, ...response.data });
+        toast(editingStudentId ? 'Student updated' : 'Student created');
         const savedStudent = students.find(item => item.id === savedId);
         if (linkLogin && !savedStudent?.authUid) {
             await manageAccount({ sectionId: section.id, studentId: savedId, ...(password ? { password } : {}) });
@@ -831,7 +803,7 @@ function studentFormData() {
         name: studentName,
         phone: els.studentPhone.value.trim(),
         email: els.studentEmail.value.trim().toLowerCase(),
-        admissionNo: els.studentAdmissionNo.value.trim() || els.studentId.value.trim(),
+        admissionNo: editingStudentId ? els.studentAdmissionNo.value.trim() : els.studentAdmissionNo.value.trim().toUpperCase(),
         enabled: els.studentEnabled.checked
     };
 }
@@ -851,7 +823,7 @@ async function deleteStudent() {
     try {
         const student = students.find(item => item.id === pendingDeleteId);
         if (student?.authUid) throw new Error('Disable and save this linked student instead to revoke login access.');
-        await deleteDoc(studentDocRef(pendingDeleteId));
+        await callStudentApi('deleteSchoolStudent', { sectionId: activeSectionId, studentId: pendingDeleteId });
         students = students.filter(student => student.id !== pendingDeleteId);
         pendingDeleteId = null;
         pendingDeleteType = null;
@@ -888,7 +860,7 @@ function downloadStudentTemplate() {
     const filePrefix = section ? slugify(sectionLabel(section)) : 'section';
     downloadBlob(new Blob([toCsv([
         STUDENT_CSV_COLUMNS,
-        ['', 'Student full name', '+91...', 'true', 'student@school.edu', '102']
+        [section?.branchId ? `${section.branchId}-102` : 'BRANCHCODE-102', 'Student full name', '+91...', 'true', 'student@school.edu', '102']
     ])], { type: 'text/csv;charset=utf-8' }), `${filePrefix || 'section'}-students-template.csv`);
 }
 
@@ -897,6 +869,7 @@ async function importStudentsCsv(event) {
     event.target.value = '';
     const section = activeSection();
     if (!file || !section) return;
+    let imported = 0;
     try {
         const rows = parseCsv(await file.text());
         if (rows.length < 2) {
@@ -904,38 +877,28 @@ async function importStudentsCsv(event) {
             return;
         }
         const headers = rows[0].map(normalizeHeader);
-        let imported = 0;
-        for (const row of rows.slice(1)) {
-            if (!row.some(cell => String(cell || '').trim())) continue;
-            const record = Object.fromEntries(headers.map((header, index) => [header, row[index] ?? '']));
-            const data = studentCsvData(record);
-            if (!data.studentName) continue;
-            if (record.password) throw new Error('Passwords must be set in the student form, not imported from CSV.');
+        if (!section.branchId) throw new Error('Assign this section to a school branch before importing students.');
+        const prepared = rows.slice(1).filter(row => row.some(cell => String(cell || '').trim())).map((row, index) => {
+            const record = Object.fromEntries(headers.map((header, column) => [header, row[column] ?? '']));
+            const student = studentCsvData(record);
+            student.admissionNo = String(student.admissionNo || '').trim().toUpperCase();
+            if (!student.studentName || !student.admissionNo) throw new Error(`Row ${index + 2}: student name and admission number are required.`);
+            if (record.password) throw new Error('Use the account form to set passwords.');
             const id = String(record.id || '').trim();
-            if (id) {
-                if (students.find(item => item.id === id)?.authUid) {
-                    await manageAccount({ sectionId: section.id, studentId: id, student: data });
-                } else {
-                    await setDoc(studentDocRef(id), {
-                        ...data, updatedAt: serverTimestamp(), updatedBy: currentUser.email || currentUser.uid
-                    }, { merge: true });
-                }
-            } else {
-                await addDoc(studentCollectionRef(), {
-                    ...data,
-                    createdDate: Date.now(),
-                    createdAt: serverTimestamp(),
-                    updatedAt: serverTimestamp(),
-                    createdBy: currentUser.email || currentUser.uid,
-                    updatedBy: currentUser.email || currentUser.uid
-                });
-            }
+            if (id !== `${section.branchId}-${student.admissionNo}`) throw new Error(`Row ${index + 2}: ID must be ${section.branchId}-${student.admissionNo}.`);
+            return { id, student };
+        });
+        if (new Set(prepared.map(row => row.id)).size !== prepared.length) throw new Error('CSV contains duplicate admission numbers.');
+        for (const { id, student } of prepared) {
+            if (students.find(item => item.id === id)?.authUid) await manageAccount({ sectionId: section.id, studentId: id, student });
+            else await callStudentApi('saveSchoolStudent', { sectionId: section.id, studentId: id, student, import: true });
             imported += 1;
         }
         toast(`${imported} student${imported === 1 ? '' : 's'} imported`);
         await loadStudents();
     } catch (error) {
-        toast(error.message || 'Unable to import students');
+        toast(`${error.message || 'Unable to import students'}${imported ? ` (${imported} rows already saved.)` : ''}`);
+        if (imported) await loadStudents();
     }
 }
 

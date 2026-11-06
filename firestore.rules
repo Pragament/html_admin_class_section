@@ -197,10 +197,24 @@ service cloud.firestore {
         && resource.data.userId == request.auth.uid;
     }
 
+    // School structure and admission claims are written only by the trusted admin API.
+    match /schoolOrganisations/{orgCode} {
+      allow read: if signedIn();
+      allow write: if false;
+    }
+    match /schoolBranches/{branchCode} {
+      allow read: if signedIn();
+      allow write: if false;
+      match /admissions/{admissionNo} {
+        allow read, write: if false;
+      }
+    }
+
     match /classSections/{sectionId} {
       allow read: if canViewSection(resource.data);
-      allow create: if isSchoolAdmin();
-      allow update, delete: if isSchoolAdmin() || canAdminSection(resource.data);
+      allow create, delete: if false;
+      allow update: if (isSchoolAdmin() || canAdminSection(resource.data))
+        && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['branchId', 'branchCode', 'orgId']);
 
       match /aiConfigs/{configId} {
         function sectionMember() {
@@ -233,11 +247,8 @@ service cloud.firestore {
       match /students/{studentId} {
         allow read: if exists(/databases/$(database)/documents/classSections/$(sectionId))
           && canViewSection(get(/databases/$(database)/documents/classSections/$(sectionId)).data);
-        allow write: if isSchoolAdmin()
-          || (
-            exists(/databases/$(database)/documents/classSections/$(sectionId))
-            && canAdminSection(get(/databases/$(database)/documents/classSections/$(sectionId)).data)
-          );
+        // The API reserves admission numbers transactionally across all sections.
+        allow write: if false;
       }
     }
 
@@ -332,6 +343,95 @@ service cloud.firestore {
             && request.resource.data.submittedAt is timestamp
             && request.resource.data.submittedAtMillis is number));
       allow delete: if false;
+    }
+
+    // Email admin app: intentionally unauthenticated, scoped to this tree.
+    // These grants are public. They do not authenticate a user or organization.
+    match /organizations/{orgId} {
+      allow read: if true;
+      allow create: if request.resource.data.keys().hasAll([
+          'id', 'name', 'adminEmail', 'domains', 'createdAt', 'clientApiKey', 'moderators'])
+        && request.resource.data.keys().hasOnly([
+          'id', 'name', 'adminEmail', 'domains', 'createdAt', 'clientApiKey', 'moderators'])
+        && request.resource.data.id == orgId
+        && request.resource.data.name is string
+        && request.resource.data.adminEmail is string
+        && request.resource.data.domains is list
+        && request.resource.data.moderators is list
+        && request.resource.data.createdAt is timestamp
+        && request.resource.data.clientApiKey is string;
+      allow update: if request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['domains', 'moderators'])
+        && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['domains'])
+          || request.resource.data.domains is list)
+        && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['moderators'])
+          || request.resource.data.moderators is list);
+      allow delete: if false;
+
+      match /accounts/{accountId} {
+        // Client web registration creates client-role accounts directly.
+        function validClientRegistration() {
+          let data = request.resource.data;
+          return exists(/databases/$(database)/documents/organizations/$(orgId))
+            && data.keys().hasAll(['id', 'orgId', 'email', 'password', 'role', 'createdAt'])
+            && data.keys().hasOnly(['id', 'orgId', 'email', 'displayName', 'password', 'role', 'createdAt'])
+            && data.id == accountId && data.orgId == orgId
+            && data.email is string && data.email.size() > 0
+            && data.email == data.email.lower()
+            && data.password is string && data.password.size() >= 6
+            && data.role == 'client' && data.createdAt is timestamp
+            && (data.get('displayName', null) == null || data.displayName is string);
+        }
+        function validAccountEdit() {
+          let data = request.resource.data;
+          let changed = data.diff(resource.data).affectedKeys();
+          return changed.hasOnly(['email', 'password', 'displayName'])
+            && (!changed.hasAny(['email']) || data.email is string)
+            && (!changed.hasAny(['password']) || data.password is string)
+            && (!changed.hasAny(['displayName'])
+              || data.get('displayName', null) == null || data.displayName is string);
+        }
+        allow read, delete: if true;
+        allow create: if validClientRegistration();
+        // Validate changed fields so password-only edits work for legacy docs.
+        allow update: if validAccountEdit();
+
+        match /emails/{messageId} {
+          function validEmail() {
+            let data = request.resource.data;
+            return data.keys().hasAll([
+                'id', 'orgId', 'accountId', 'toEmail', 'toName', 'fromEmail',
+                'fromName', 'subject', 'body', 'snippet', 'isHtml', 'datetime'])
+              && data.keys().hasOnly([
+                'id', 'orgId', 'accountId', 'toEmail', 'toName', 'fromEmail',
+                'fromName', 'subject', 'body', 'snippet', 'isHtml', 'datetime'])
+              && data.id == messageId && data.orgId == orgId && data.accountId == accountId
+              && data.toEmail is string && data.toName is string
+              && data.fromEmail is string && data.fromName is string
+              && data.subject is string && data.body is string && data.snippet is string
+              && data.isHtml is bool && data.datetime is timestamp;
+          }
+          allow read: if true;
+          // Repeated Gmail IDs use set(), so updates must be allowed for replay.
+          allow create, update: if validEmail();
+          allow delete: if false;
+        }
+      }
+
+      match /otps/{otpId} {
+        allow read: if true;
+        allow create: if request.resource.data.keys().hasAll([
+            'id', 'orgId', 'code', 'createdAt', 'expiresAt'])
+          && request.resource.data.keys().hasOnly([
+            'id', 'orgId', 'code', 'createdAt', 'expiresAt'])
+          && request.resource.data.id == otpId && request.resource.data.orgId == orgId
+          && request.resource.data.code is string
+          && request.resource.data.code.matches('^[0-9]{6}$')
+          && request.resource.data.createdAt is timestamp
+          && request.resource.data.expiresAt is timestamp
+          && request.resource.data.expiresAt > request.resource.data.createdAt;
+        allow update, delete: if false;
+      }
     }
   }
 }

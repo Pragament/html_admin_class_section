@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>School Admin - Class Sections</title>
-    <link rel="stylesheet" href="styles.css?v=20261026.1" />
+    <link rel="stylesheet" href="styles.css?v=20261106.1" />
 </head>
 <body>
     <header class="topbar" id="topbar" hidden>
@@ -13,6 +13,8 @@
             <p id="statusText">Manage class sections</p>
         </div>
         <div class="topbar-actions">
+            <a class="btn" href="organisations.html">Organisations</a>
+            <a class="btn" href="branches.html">Branches</a>
             <a class="btn" href="questions.html">Questions</a>
             <a class="btn" href="taxonomy.html">Taxonomy</a>
             <a class="btn" href="submissions.html">Submissions</a>
@@ -72,6 +74,7 @@
                             <option value="all">All</option>
                         </select>
                     </label>
+                    <label class="field compact-field"><span>Branch</span><select id="sectionBranchFilter"><option value="all">All branches</option><option value="unassigned">Unassigned sections</option></select></label>
                     <span class="count-chip" id="sectionCount">0</span>
                 </div>
                 <div id="sectionTableWrap" class="table-wrap"></div>
@@ -119,6 +122,9 @@
                 <button class="btn" id="cancelSectionBtn" type="button">Cancel</button>
             </div>
             <div class="form-grid">
+                <label class="field">
+                    <span>School Branch</span><select id="sectionBranch" required></select>
+                </label>
                 <label class="field">
                     <span>Section Name</span>
                     <input id="sectionName" required autocomplete="off" placeholder="DSS grade 8" />
@@ -171,14 +177,14 @@
             </label>
             <div class="form-grid">
                 <label class="field">
-                    <span>Student ID</span>
-                    <input id="studentId" autocomplete="off" placeholder="Auto-generated if blank" />
+                    <span>Student ID (branch code + admission number)</span>
+                    <input id="studentId" autocomplete="off" placeholder="Choose a branch and enter admission number" readonly />
                 </label>
                 <label class="field">
                     <span>Student Name</span>
                     <input id="studentName" required autocomplete="off" placeholder="Student full name" />
                 </label>
-                <label class="field"><span>Admission Number</span><input id="studentAdmissionNo" autocomplete="off" /></label>
+                <label class="field"><span>Admission Number</span><input id="studentAdmissionNo" pattern="[A-Za-z0-9][A-Za-z0-9_-]{0,63}" maxlength="64" required autocomplete="off" /></label>
                 <label class="field"><span>School Email / Login Username</span><input id="studentEmail" type="email" autocomplete="off" /></label>
                 <label class="field"><span>Set / Reset Password</span><input id="studentPassword" type="password" minlength="6" maxlength="128" autocomplete="new-password" placeholder="Leave blank to keep current password" /></label>
                 <label class="field">
@@ -230,6 +236,6 @@
     </dialog>
 
     <div id="toast" class="toast"></div>
-    <script type="module" src="app.js?v=20261026.1"></script>
+    <script type="module" src="app.js?v=20261106.1"></script>
 </body>
 </html>

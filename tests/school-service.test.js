@@ -1,0 +1,67 @@
+const { test } = require('node:test');
+const assert = require('node:assert/strict');
+const { createStudentService } = require('../functions/student-service');
+const host = process.env.FIRESTORE_RULES_TEST_HOST;
+test('school hierarchy enforces global codes, branch admissions and stable existing sections', { skip: !host }, async () => {
+    assert.match(host, /^(127\.0\.0\.1|localhost):\d+$/);
+    process.env.FIRESTORE_EMULATOR_HOST = host;
+    const { initializeApp, deleteApp } = require('firebase-admin/app');
+    const { getFirestore, FieldValue } = require('firebase-admin/firestore');
+    const projectId = 'demo-school-structure';
+    await fetch(`http://${host}/emulator/v1/projects/${projectId}/databases/(default)/documents`, { method: 'DELETE' });
+    const app = initializeApp({ projectId }, 'school-structure-tests');
+    const db = getFirestore(app);
+    const service = createStudentService({ db, auth: {}, timestamp: () => FieldValue.serverTimestamp() });
+    const request = data => ({ auth: { uid: 'school-admin', token: { role: 'admin', email: 'admin@example.com' } }, data });
+    const structure = data => service.manageSchoolStructure(request(data));
+    const section = (sectionId, branchId) => service.saveSchoolSection(request({ sectionId, section: { sectionName: sectionId, branchId, members: [{ email: 'admin@example.com', role: 'admin' }] } }));
+    const student = (sectionId, extra = {}) => service.saveSchoolStudent(request({ sectionId, student: { admissionNo: '00755', studentName: 'Ananya', name: 'Ananya', phone: '9666033404', enabled: true }, ...extra }));
+    try {
+        await assert.rejects(service.manageSchoolStructure({ auth: { uid: 'outsider', token: {} }, data: { kind: 'organisation', action: 'save', create: true, code: 'DSS', name: 'DSS' } }), { code: 'permission-denied' });
+        const duplicate = await Promise.allSettled([1,2].map(() => structure({ kind: 'organisation', action: 'save', create: true, code: 'dss', name: 'DSS' })));
+        assert.equal(duplicate.filter(row => row.status === 'fulfilled').length, 1);
+        assert.equal(duplicate.find(row => row.status === 'rejected').reason.code, 'already-exists');
+        await structure({ kind: 'organisation', action: 'save', create: true, code: 'OTHER', name: 'Other school' });
+        await structure({ kind: 'branch', action: 'save', create: true, code: 'SGD', orgId: 'DSS', name: 'Sangareddy' });
+        await assert.rejects(structure({ kind: 'branch', action: 'save', create: true, code: 'sgd', orgId: 'OTHER', name: 'Duplicate code' }), { code: 'already-exists' });
+        await structure({ kind: 'branch', action: 'save', create: true, code: 'HYD', orgId: 'DSS', name: 'Hyderabad' });
+        await structure({ kind: 'branch', action: 'save', code: 'HYD', orgId: 'DSS', name: 'Hyderabad updated', enabled: false });
+        await assert.rejects(structure({ kind: 'branch', action: 'save', code: 'SGD', orgId: 'OTHER', name: 'Moved' }), { code: 'failed-precondition' });
+        await section('grade6a', 'SGD'); await section('grade6', 'SGD'); await section('other-branch', 'HYD');
+        const result = await student('grade6a', { create: true });
+        assert.equal(result.id, 'SGD-00755');
+        await assert.rejects(student('grade6a', { create: true }), { code: 'already-exists' });
+        const shared = await student('grade6'); assert.equal(shared.branchStudentId, 'SGD-00755');
+        await assert.rejects(student('grade6', { studentId: 'WRONG-00755', import: true }), { code: 'invalid-argument' });
+        await assert.rejects(student('grade6a', { studentId: 'SGD-00755', student: { admissionNo: '888', studentName: 'Ananya', phone: '9666033404' } }), { code: 'failed-precondition' });
+        await section('conflict-section', 'SGD');
+        await assert.rejects(student('conflict-section', { student: { admissionNo: '00755', studentName: 'Someone else', phone: '1111111111' } }), { code: 'already-exists' });
+        assert.equal((await student('other-branch')).id, 'HYD-00755');
+        await section('race-a', 'SGD'); await section('race-b', 'SGD');
+        const admissionRace = await Promise.allSettled(['race-a', 'race-b'].map((sectionId, index) => student(sectionId, {
+            student: { admissionNo: '999', studentName: `Different ${index}`, phone: index ? '1234567890' : '9876543210' }
+        })));
+        assert.equal(admissionRace.filter(result => result.status === 'fulfilled').length, 1);
+        assert.equal(admissionRace.find(result => result.status === 'rejected').reason.code, 'already-exists');
+        await db.doc('classSections/legacy').set({ sectionName: 'Legacy', members: [{ email: 'admin@example.com', role: 'admin' }] });
+        await db.doc('classSections/legacy/students/755').set({ studentName: 'Legacy Student', phone: '1234567890', admissionNo: 's755', authUid: 'existing-login', studentKey: 'legacy_s755' });
+        await section('legacy', 'SGD');
+        const legacy = (await db.doc('classSections/legacy/students/755').get()).data();
+        assert.equal(legacy.branchStudentId, 'SGD-S755'); assert.equal(legacy.admissionNo, 's755'); assert.equal(legacy.authUid, 'existing-login'); assert.equal(legacy.studentKey, 'legacy_s755');
+        await assert.rejects(service.saveSchoolStudent(request({ sectionId: 'legacy', studentId: '755', student: { admissionNo: 's755', studentName: 'Changed', phone: '1234567890' }, syncLinked: true })), { code: 'failed-precondition' });
+        const skipped = await service.manageStudentAccount(request({ sectionId: 'legacy', studentId: '755', createOnly: true, student: { admissionNo: 'wrong' } }));
+        assert.equal(skipped.status, 'skipped');
+        assert.equal((await db.doc('classSections/legacy/students/755').get()).data().admissionNo, 's755');
+        await assert.rejects(section('legacy', 'HYD'), { code: 'failed-precondition' });
+        await assert.rejects(structure({ kind: 'organisation', action: 'delete', code: 'DSS' }), { code: 'failed-precondition' });
+        await assert.rejects(structure({ kind: 'branch', action: 'delete', code: 'SGD' }), { code: 'failed-precondition' });
+        await assert.rejects(service.deleteSchoolSection(request({ sectionId: 'grade6a' })), { code: 'failed-precondition' });
+        await service.deleteSchoolStudent(request({ sectionId: 'grade6', studentId: 'SGD-00755' }));
+        const registry = (await db.doc('schoolBranches/SGD/admissions/00755').get()).data();
+        assert.equal(registry.sections.grade6, undefined); assert.equal(registry.sections.grade6a, 'SGD-00755');
+        await service.deleteSchoolSection(request({ sectionId: 'grade6' }));
+        await structure({ kind: 'branch', action: 'save', create: true, code: 'EMPTY', orgId: 'OTHER', name: 'Empty' });
+        await structure({ kind: 'branch', action: 'delete', code: 'EMPTY' });
+        await structure({ kind: 'organisation', action: 'delete', code: 'OTHER' });
+    } finally { await db.terminate(); await deleteApp(app); }
+});

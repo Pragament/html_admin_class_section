@@ -168,4 +168,22 @@ test('section membership queries enforce the supplied Firestore rules', { skip: 
     });
     assert.equal(wrongClassroom.status, 403);
 
+    // Uniqueness cannot be bypassed by writing school structure or rosters directly.
+    await seed('schoolAdmins/rules-test-user', { active: { booleanValue: true } });
+    const adminHeaders = { ...headers, Authorization: `Bearer ${token('admin@example.com')}` };
+    for (const [path, fields] of [
+        ['schoolOrganisations/ORG', { code: text('ORG'), name: text('School') }],
+        ['schoolBranches/BRANCH', { code: text('BRANCH'), orgId: text('ORG'), name: text('Branch') }],
+        ['schoolBranches/BRANCH/admissions/755', { studentId: text('BRANCH-755') }],
+        ['classSections/client-created', { sectionName: text('Bad'), branchId: text('BRANCH') }],
+        ['classSections/rules-test-admin/students/BRANCH-755', { admissionNo: text('755') }]
+    ]) {
+        const response = await fetch(`${base}/${path}`, { method: 'PATCH', headers: adminHeaders, body: JSON.stringify({ fields }) });
+        assert.equal(response.status, 403, await response.text());
+    }
+    const tampered = await fetch(`${base}/classSections/rules-test-admin?updateMask.fieldPaths=branchId`, {
+        method: 'PATCH', headers: adminHeaders, body: JSON.stringify({ fields: { branchId: text('OTHER') } })
+    });
+    assert.equal(tampered.status, 403);
+
 });

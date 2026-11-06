@@ -42,10 +42,8 @@ match /studentProfiles/{uid} {
 }
 match /classSections/{sectionId}/students/{studentId} {
   allow read: if isSchoolAdmin();
-  // Prevent client edits from bypassing Auth synchronization for linked students.
-  allow create: if isSchoolAdmin() && !request.resource.data.keys().hasAny(['authUid', 'studentKey', 'password']);
-  allow update: if isSchoolAdmin() && !resource.data.keys().hasAny(['authUid']) && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['authUid', 'studentKey', 'password']);
-  allow delete: if isSchoolAdmin() && !resource.data.keys().hasAny(['authUid']);
+  // Trusted API enforces branch admissions and linked-account synchronization.
+  allow write: if false;
 }
 ```
 

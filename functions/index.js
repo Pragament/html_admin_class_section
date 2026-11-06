@@ -16,3 +16,5 @@ function callable(handler) {
 }
 exports.manageStudentAccount = onCall(callable(service.manageStudentAccount));
 exports.migrateStudentProfiles = onCall({ timeoutSeconds: 540 }, callable(service.migrateStudentProfiles));
+
+for (const operation of ['manageSchoolStructure', 'saveSchoolSection', 'saveSchoolStudent', 'deleteSchoolStudent', 'deleteSchoolSection']) exports[operation] = onCall(callable(service[operation]));

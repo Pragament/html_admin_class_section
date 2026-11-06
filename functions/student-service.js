@@ -146,6 +146,14 @@ async function emailConflictMessage(email) {
 async function manageStudentAccount(request) {
     await requireAdmin(request);
     const data = request.data || {};
+    const before = await studentRef(data).get();
+    if (data.createOnly === true && before.exists && before.data().authUid) return { authUid: before.data().authUid, status: 'skipped' };
+    const section = await db.doc(`classSections/${segment(data.sectionId)}`).get();
+    if (section.exists && section.data().branchId && data.student && data.resetPasswordFromPhone !== true) {
+        const roster = await studentRef(data).get();
+        await schools.saveSchoolStudent({ ...request, data: { sectionId: data.sectionId, studentId: data.studentId,
+            student: { ...(roster.exists ? roster.data() : {}), ...data.student } } }, true);
+    }
     const ref = studentRef(data);
     const snap = await ref.get();
     if (!snap.exists) throw new AccountError('not-found', 'Save the student first.');
@@ -221,6 +229,7 @@ async function migrateStudentProfiles(request) {
     return { results, nextId: snap.size === 100 ? snap.docs[snap.size - 1].id : null };
 }
 
-return { manageStudentAccount, migrateStudentProfiles };
+const schools = require('./school-service').createSchoolService({ db, timestamp, requireAdmin });
+return { manageStudentAccount, migrateStudentProfiles, ...schools };
 }
 module.exports = { createStudentService, AccountError };

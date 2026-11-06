@@ -10,7 +10,7 @@ const PUBLIC_FILES = new Set([
     'students.html', 'students.js', 'submissions.html', 'submissions.js',
     'questions.html', 'questions.js', 'taxonomy.html', 'taxonomy.js',
     'firebase-config.js', 'firebase-config.local.js', 'copy-data.html', 'copy-data.js',
-    'question-filters.js'
+    'question-filters.js', 'organisations.html', 'branches.html', 'schools.js'
 ]);
 const TEAM_PROJECT_ID = 'eschool-dev-4c6b4';
 // The pages use firebase-config.local.js when it exists, so the server must use that same project.
@@ -57,7 +57,7 @@ function createLocalServer({ auth, service, root = __dirname, logger = console }
         const url = new URL(req.url, origin);
         if (url.pathname.startsWith('/api/')) {
             const operation = url.pathname.slice(5);
-            if (!['manageStudentAccount', 'migrateStudentProfiles'].includes(operation)) return json(res, 404, { error: { message: 'Unknown API endpoint.' } });
+            if (!['manageStudentAccount', 'migrateStudentProfiles', 'manageSchoolStructure', 'saveSchoolSection', 'saveSchoolStudent', 'deleteSchoolStudent', 'deleteSchoolSection'].includes(operation)) return json(res, 404, { error: { message: 'Unknown API endpoint.' } });
             if (req.method !== 'POST') return json(res, 405, { error: { message: 'Use POST.' } });
             const requestId = randomUUID();
             let stage = 'verify-login';

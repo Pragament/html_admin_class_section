@@ -32,7 +32,7 @@ body {
 }
 
 body::before {
-    content: "v2026.10.26.1";
+    content: "v2026.11.06.1";
     position: fixed;
     top: 6px;
     left: 6px;
@@ -942,3 +942,8 @@ a.btn,
         padding: 12px;
     }
 }
+
+/* School structure pages share the admin controls and table styling. */
+body[data-kind] .topbar { padding-top: 32px; }
+body[data-kind] .app-shell { display: grid; gap: 16px; }
+body[data-kind] #schoolForm { margin-top: 16px; }
