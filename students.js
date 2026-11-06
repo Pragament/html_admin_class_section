@@ -10,17 +10,20 @@ import {
 import {
     collection,
     getDocs,
-    getFirestore
+    getFirestore,
+    query,
+    where
 } from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
 
 
 const COLLECTIONS = {
     questions: 'qb_questions_v1',
+    classrooms: 'classrooms',
     sections: 'classSections',
     submissions: 'qb_quiz_submissions_v1'
 };
 // Question class/subject/options rarely change, so they are cached to avoid re-reading every question on each visit.
-const QUESTION_CACHE_KEY = `studentRecords.questionMeta.v2.${firebaseConfig.projectId}`;
+const QUESTION_CACHE_KEY = `studentRecords.questionMeta.v3.${firebaseConfig.projectId}`;
 const QUESTION_CACHE_TTL = 12 * 60 * 60 * 1000;
 const PAGE_SIZE = 100;
 const ROMAN = { i: 1, ii: 2, iii: 3, iv: 4, v: 5, vi: 6, vii: 7, viii: 8, ix: 9, x: 10, xi: 11, xii: 12 };
@@ -33,6 +36,7 @@ const db = getFirestore(app);
 
 let currentUser = null;
 let answers = [];
+let recordsLoadError = '';
 let visibleLimit = PAGE_SIZE;
 let toastTimer = null;
 
@@ -72,6 +76,8 @@ onAuthStateChanged(auth, async (user) => {
 
     if (!user) {
         answers = [];
+        recordsLoadError = '';
+        renderFilterOptions();
         setStatus('Sign in with Google');
         renderAnswers();
         return;
@@ -115,42 +121,69 @@ function isAllowedAdmin(user) {
 
 async function loadData({ refreshQuestions = false } = {}) {
     if (!currentUser) return;
+    const user = currentUser;
+    recordsLoadError = '';
     setStatus('Loading student records...');
     try {
-        const [sectionSnap, submissionSnap, questionMeta] = await Promise.all([
-            getDocs(collection(db, COLLECTIONS.sections)),
-            getDocs(collection(db, COLLECTIONS.submissions)),
-            loadQuestionMeta(refreshQuestions)
+        const email = String(user.email || '').toLowerCase();
+        if (!email) throw new Error('Your signed-in account needs an email address to view student records.');
+        const [sectionSnap, ownedClassrooms, questionMeta] = await Promise.all([
+            getDocs(query(collection(db, COLLECTIONS.sections), where('members', 'array-contains-any',
+                ['admin', 'viewer'].map(role => ({ email, role }))))),
+            getDocs(query(collection(db, COLLECTIONS.classrooms), where('creatorId', '==', user.uid))),
+            loadQuestionMeta(refreshQuestions, user)
         ]);
+        const adminSections = sectionSnap.docs.filter(section => (section.data().members || [])
+            .some(member => member.email === email && member.role === 'admin'));
+        const submissionSnapshots = await Promise.all([
+            ...ownedClassrooms.docs.map(classroom => getDocs(query(
+                collection(db, COLLECTIONS.submissions), where('classroomId', '==', classroom.id)))),
+            ...adminSections.map(section => getDocs(query(
+                collection(db, COLLECTIONS.submissions), where('sectionId', '==', section.id))))
+        ]);
+        if (currentUser !== user) return;
+        const submissionDocs = [...new Map(submissionSnapshots.flatMap(snapshot => snapshot.docs)
+            .map(document => [document.id, document])).values()];
         const sectionNames = new Map(sectionSnap.docs.map(d => {
             const data = d.data();
             return [d.id, data.sectionName || data.name || data.className || data.title || d.id];
         }));
-        answers = submissionSnap.docs.flatMap(d => answerRows({ id: d.id, ...d.data() }, sectionNames, questionMeta))
+        answers = submissionDocs.flatMap(d => answerRows({ id: d.id, ...d.data() }, sectionNames, questionMeta))
             .sort((a, b) => b.submittedMillis - a.submittedMillis);
         renderFilterOptions();
         resetAndRender();
-        setStatus(`${answers.length} answers from ${submissionSnap.size} submissions`);
+        setStatus(`${answers.length} answers from ${submissionDocs.length} submissions`);
     } catch (error) {
+        if (currentUser !== user) return;
         answers = [];
+        recordsLoadError = error.code === 'permission-denied'
+            ? 'Unable to load student records: access was denied. Check the published Firestore rules and your section admin membership, then refresh.'
+            : error.message || 'Unable to load student records. Please refresh to try again.';
+        renderFilterOptions();
         renderAnswers();
-        setStatus(error.message || 'Unable to load student records');
+        setStatus(recordsLoadError);
         toast('Unable to load student records');
     }
 }
 
-async function loadQuestionMeta(forceRefresh) {
+async function loadQuestionMeta(forceRefresh, user) {
+    const cacheKey = `${QUESTION_CACHE_KEY}.${user.uid}`;
     if (!forceRefresh) {
         try {
-            const cached = JSON.parse(localStorage.getItem(QUESTION_CACHE_KEY) || 'null');
+            const cached = JSON.parse(localStorage.getItem(cacheKey) || 'null');
             if (cached && Date.now() - cached.savedAt < QUESTION_CACHE_TTL) return cached.items;
         } catch (error) {
             // Ignore unreadable cache and fall through to Firestore.
         }
     }
-    const snap = await getDocs(collection(db, COLLECTIONS.questions));
+    const snapshots = await Promise.all([
+        getDocs(query(collection(db, COLLECTIONS.questions), where('status', '==', 'published'))),
+        getDocs(query(collection(db, COLLECTIONS.questions), where('authorUid', '==', user.uid)))
+    ]);
+    const questionDocs = [...new Map(snapshots.flatMap(snapshot => snapshot.docs)
+        .map(document => [document.id, document])).values()];
     const items = {};
-    snap.docs.forEach(d => {
+    questionDocs.forEach(d => {
         const q = d.data();
         items[d.id] = [
             classLabel(q.classId || q.className),
@@ -161,7 +194,7 @@ async function loadQuestionMeta(forceRefresh) {
         ];
     });
     try {
-        localStorage.setItem(QUESTION_CACHE_KEY, JSON.stringify({ savedAt: Date.now(), items }));
+        localStorage.setItem(cacheKey, JSON.stringify({ savedAt: Date.now(), items }));
     } catch (error) {
         // Storage may be full or blocked; the page still works without the cache.
     }
@@ -251,7 +284,8 @@ function renderAnswers() {
                 `).join('')}
             </tbody>
         </table>
-    ` : '<div class="empty-card">No answers match these filters.</div>';
+    ` : `<div class="empty-card"${recordsLoadError ? ' role="alert"' : ''}>${esc(recordsLoadError || (answers.length ? 'No answers match these filters.' : 'No answers found in your classrooms or administered sections.'))}</div>`;
+    els.exportBtn.disabled = Boolean(recordsLoadError) || !rows.length;
 }
 
 function filteredAnswers() {

@@ -20,6 +20,7 @@ import {
 
 const COLLECTIONS = {
     classrooms: 'classrooms',
+    sections: 'classSections',
     submissions: 'qb_quiz_submissions_v1'
 };
 
@@ -45,6 +46,7 @@ const auth = getAuth(app);
 const db = getFirestore(app);
 let currentUser = null;
 let classrooms = [];
+let classroomsLoadError = '';
 let selectedClassroomIds = new Set();
 let toastTimer = null;
 
@@ -84,6 +86,7 @@ onAuthStateChanged(auth, async (user) => {
 
     if (!user) {
         classrooms = [];
+        classroomsLoadError = '';
         selectedClassroomIds = new Set();
         setStatus('Sign in with Google');
         renderClassrooms();
@@ -133,17 +136,35 @@ function isAllowedAdmin(user) {
 
 async function loadClassrooms() {
     if (!currentUser) return;
+    const user = currentUser;
+    classroomsLoadError = '';
     setStatus('Loading classrooms...');
     try {
-        const snap = await getDocs(collection(db, COLLECTIONS.classrooms));
-        classrooms = snap.docs.map(d => ({ id: d.id, ...d.data() })).sort(compareClassrooms);
+        const email = String(user.email || '').toLowerCase();
+        if (!email) throw new Error('Your signed-in account needs an email address to view classrooms.');
+        const [owned, adminSections] = await Promise.all([
+            getDocs(query(collection(db, COLLECTIONS.classrooms), where('creatorId', '==', user.uid))),
+            getDocs(query(collection(db, COLLECTIONS.sections), where('members', 'array-contains', { email, role: 'admin' })))
+        ]);
+        const sectionClassrooms = await Promise.all(adminSections.docs.map(section =>
+            getDocs(query(collection(db, COLLECTIONS.classrooms), where('sectionId', '==', section.id)))
+        ));
+        if (currentUser !== user) return;
+        const documents = new Map([owned, ...sectionClassrooms].flatMap(snapshot => snapshot.docs)
+            .map(document => [document.id, document]));
+        classrooms = [...documents.values()].map(document => ({ ...document.data(), id: document.id })).sort(compareClassrooms);
         selectedClassroomIds = new Set([...selectedClassroomIds].filter(id => classrooms.some(classroom => classroom.id === id)));
         renderClassrooms();
         setStatus(`${classrooms.length} classroom${classrooms.length === 1 ? '' : 's'} loaded`);
     } catch (error) {
+        if (currentUser !== user) return;
         classrooms = [];
+        selectedClassroomIds = new Set();
+        classroomsLoadError = error.code === 'permission-denied'
+            ? 'Unable to load classrooms: access was denied. Check the published Firestore rules and your section admin membership, then refresh.'
+            : error.message || 'Unable to load classrooms. Please refresh to try again.';
         renderClassrooms();
-        setStatus(error.message || 'Unable to load classrooms');
+        setStatus(classroomsLoadError);
         toast('Unable to load classrooms');
     }
 }
@@ -187,7 +208,7 @@ function renderClassrooms() {
                 `).join('')}
             </tbody>
         </table>
-    ` : '<div class="empty-card">No classrooms found.</div>';
+    ` : `<div class="empty-card"${classroomsLoadError ? ' role="alert"' : ''}>${esc(classroomsLoadError || (classrooms.length ? 'No classrooms match your search.' : 'No classrooms found in your owned classrooms or administered sections.'))}</div>`;
     updateSelectionState();
 }
 
@@ -218,7 +239,8 @@ function handleTableSelection(event) {
 function updateSelectionState() {
     const selectedCount = selectedClassroomIds.size;
     els.selectedCount.textContent = `${selectedCount} selected`;
-    els.deleteSelectedBtn.disabled = selectedCount === 0;
+    els.deleteSelectedBtn.disabled = true;
+    els.deleteSelectedBtn.title = 'Classroom and submission deletion is disabled by the Firestore rules.';
 }
 
 function openDeleteDialog() {

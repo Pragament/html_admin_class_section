@@ -42,20 +42,18 @@ match /studentProfiles/{uid} {
 }
 match /classSections/{sectionId}/students/{studentId} {
   allow read: if isSchoolAdmin();
-  // Prevent client edits from bypassing Auth synchronization for linked students.
-  allow create: if isSchoolAdmin() && !request.resource.data.keys().hasAny(['authUid', 'studentKey', 'password']);
-  allow update: if isSchoolAdmin() && !resource.data.keys().hasAny(['authUid']) && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['authUid', 'studentKey', 'password']);
-  allow delete: if isSchoolAdmin() && !resource.data.keys().hasAny(['authUid']);
+  // Trusted API enforces branch admissions and linked-account synchronization.
+  allow write: if false;
 }
 ```
 
-For each existing student, edit their school email and admission number and set a password (6–128 characters). Saving creates a Firebase Auth account and atomically links the roster and profile. Existing unrelated email accounts are rejected, never automatically adopted. Existing accounts can be linked only by a trusted operator who verifies identity and sets `authUid` on the roster.
+For each existing student, edit their school email and admission number and set a password (6–128 characters). Saving creates a Firebase Auth account and atomically links the roster and profile. Existing unrelated email accounts are rejected, never automatically adopted. Bulk creation passes `linkExisting: true`: when the email already belongs to a student profile, the backend links the current roster only if the original roster has the same admission number and full phone digits. The password and original membership stay unchanged. Accounts without a matching student profile are rejected. No manual `authUid` edits are needed.
 
 **Migrate Login Profiles** processes all students in the open section in pages of 100. It backfills profiles for linked accounts and reports students needing accounts and individual failures. It does not invent emails/passwords, delete old collections, or alter historical submissions. Rerunning is safe. Export a roster backup before migration. No production data migration has been executed by adding this feature.
 
 The profile contains `authUid`, `email`, `username`, `sectionId`, `studentDocId`, `admissionNo`, `studentKey`, `studentName`, `active`, `createdAt`, and `updatedAt`. `studentKey` uses the section and admission number, falling back to the existing document ID. Preserve admission numbers once used by submissions.
 
-Set a new password in Edit Student to reset it. Uncheck Enabled and save to disable Auth, revoke refresh tokens, and set the profile inactive. Linked students cannot be deleted through this app. Passwords are sent only to the local backend and never persisted or exported.
+Set a new password in Edit Student to reset the shared login password. Uncheck Enabled and save to disable that section membership. Auth and the profile remain active while another membership is enabled; disabling every membership disables the login. Linked students cannot be deleted through this app. Passwords are sent only to the local backend and never persisted or exported.
 
 Auth and Firestore cannot share one transaction. The stable account UID lets a retry recover an account after an interrupted profile write. If synchronization fails, the saved roster may temporarily differ from Auth/profile; retry Save and inspect the failure. Student app rules must check active profiles for access revocation, since existing ID tokens can remain valid until expiry.
 
@@ -78,3 +76,23 @@ id,email,password,admissionNo
 Fill in each email and a 6–128 character password. Use **Preview Account CSV**, review the student IDs, emails and validation results, then **Create Accounts**. All rows must pass validation before creation starts. Passwords are never shown in the preview or written to Firestore. This account CSV is distinct from the normal student import, which rejects passwords.
 
 The CSV contains initial credentials; keep it private and delete it when no longer needed. The browser holds credentials in memory only while the dialog is in use and clears them on completion or close. Each request creates the account, links the existing roster document, and writes its login profile. Existing linked accounts are skipped on the server without resetting passwords. Accounts created successfully stay created if a later row fails. Quota, authorization, network and server failures stop processing. **Stop After Current Student** preserves completed work. Reload the CSV to retry remaining students; already linked accounts will be skipped. No extra migration is required after successful creation.
+
+
+### Multiple sections per login
+
+Profiles now include `memberships`, a map keyed by section ID. Each entry holds `studentDocId`, `admissionNo`, `studentKey`, and `active`. Legacy top-level section fields remain the original primary membership for compatibility. Synchronization seeds that original membership before adding another section. Linking an existing login uses a Firestore transaction, preserves its password, and updates the new roster and memberships together.
+
+Restart the local backend after updating it, and publish `firestore.rules` for section-specific student access. The rules validate each submission against the corresponding membership and require its classroom to belong to that same section. Legacy profiles retain single-section access until synchronized. The separate student app must enumerate active `memberships` (falling back to the top-level fields for legacy profiles), allow section selection, and query classrooms/submissions per selected section with that entry's admission number and student key. This repository does not contain that student app, so the client change is not included here.
+
+**Retry an existing student in a second section**
+
+1. Verify that the original roster entry is linked to the existing login and has a student profile. In both roster entries, check the admission number and full phone number. If admission number is blank, the student document ID is used (for example, `045` stays `045`). Phone formatting is ignored, but the entire digit sequence must match, including any country code, and must contain at least six digits.
+2. Restart `npm start` and refresh the admin page. Open the destination section (for Ananya, **DSS grade 6**; her original section is **DSS grade 6 A**).
+3. Choose **Bulk Create Accounts → Preview Existing Students**, enter the school domain, and verify that the generated email matches the existing login. You can also use **Preview Account CSV** with that email. Then click **Create Accounts**.
+4. Look for **Existing login linked to this section; password unchanged**. Verify both roster entries show **Linked**. A rerun skips the already linked row. A mismatched admission number or phone, a missing student profile, or a different roster entry already linked in the destination section blocks the link. Check the records rather than creating another email for the same student.
+
+**Student app integration**
+
+After sign-in, read `studentProfiles/{uid}` and require an active profile. Offer the entries in `memberships` with `active: true` as section choices. Use the legacy top-level fields only for profiles without a membership map. Once a section is selected, use its section ID for the classroom query and its `admissionNo` and `studentKey` for submissions. Query submission history with both the selected `sectionId` and its `studentKey`; the primary student-key query remains available for legacy history. When switching sections, reload classroom and history data using the newly selected membership.
+
+Publish the updated [Firestore rules](firestore.rules) before verifying access in the student app. Test that the same login can open both enabled sections, that a disabled membership stays blocked, and that a submission cannot pair one section's identity with a classroom in another section. Linking in the admin page alone does not add a section selector to the separate student app.

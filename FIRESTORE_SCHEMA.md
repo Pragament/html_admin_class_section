@@ -484,3 +484,8 @@ Without `teacherUid`, rules can authorize `classroomId` reads when `classroomId`
 ## Authenticated student profiles
 
 Roster records remain at `classSections/{sectionId}/students/{studentDocId}` and add `email`, `username` (same as email), `admissionNo`, `authUid`, and `studentKey`. The trusted account backend maintains `studentProfiles/{authUid}` for direct student login lookup. See [Student Auth Deployment](STUDENT_AUTH_DEPLOYMENT.md) for the profile schema, migration, access rules, and rollout requirements. Passwords must never appear in Firestore.
+
+
+## School hierarchy
+
+School organisations and branches live in `schoolOrganisations/{ORGCODE}` and `schoolBranches/{BRANCHCODE}`. Sections keep their existing paths and gain `orgId`, `branchId`, and `branchCode`. A branch admission registry links the same canonical student across sections. New roster IDs are `BRANCHCODE-ADMISSIONNUMBER`. See [school structure schema and setup](SCHOOL_STRUCTURE.md) for transaction guarantees, CSV format, legacy-ID preservation and deployment steps.

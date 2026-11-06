@@ -10,7 +10,7 @@ const PUBLIC_FILES = new Set([
     'students.html', 'students.js', 'submissions.html', 'submissions.js',
     'questions.html', 'questions.js', 'taxonomy.html', 'taxonomy.js',
     'firebase-config.js', 'firebase-config.local.js', 'copy-data.html', 'copy-data.js',
-    'question-filters.js'
+    'question-filters.js', 'organisations.html', 'branches.html', 'schools.js'
 ]);
 const TEAM_PROJECT_ID = 'eschool-dev-4c6b4';
 // The pages use firebase-config.local.js when it exists, so the server must use that same project.
@@ -22,7 +22,7 @@ async function expectedProjectId(root) {
         return TEAM_PROJECT_ID;
     }
 }
-const TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8' };
+const TYPES = { '.mjs': 'text/javascript; charset=utf-8', '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8' };
 const STATUS = { 'resource-exhausted': 429, unauthenticated: 401, 'permission-denied': 403, 'invalid-argument': 400, 'not-found': 404, 'failed-precondition': 409, 'already-exists': 409 };
 function json(res, status, data) {
     res.writeHead(status, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' });
@@ -57,7 +57,7 @@ function createLocalServer({ auth, service, root = __dirname, logger = console }
         const url = new URL(req.url, origin);
         if (url.pathname.startsWith('/api/')) {
             const operation = url.pathname.slice(5);
-            if (!['manageStudentAccount', 'migrateStudentProfiles'].includes(operation)) return json(res, 404, { error: { message: 'Unknown API endpoint.' } });
+            if (!['manageStudentAccount', 'migrateStudentProfiles', 'manageSchoolStructure', 'saveSchoolSection', 'saveSchoolStudent', 'deleteSchoolStudent', 'deleteSchoolSection'].includes(operation)) return json(res, 404, { error: { message: 'Unknown API endpoint.' } });
             if (req.method !== 'POST') return json(res, 405, { error: { message: 'Use POST.' } });
             const requestId = randomUUID();
             let stage = 'verify-login';

@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>School Admin - Class Sections</title>
-    <link rel="stylesheet" href="styles.css?v=20260926.1" />
+    <link rel="stylesheet" href="styles.css?v=20261106.1" />
 </head>
 <body>
     <header class="topbar" id="topbar" hidden>
@@ -13,6 +13,8 @@
             <p id="statusText">Manage class sections</p>
         </div>
         <div class="topbar-actions">
+            <a class="btn" href="organisations.html">Organisations</a>
+            <a class="btn" href="branches.html">Branches</a>
             <a class="btn" href="questions.html">Questions</a>
             <a class="btn" href="taxonomy.html">Taxonomy</a>
             <a class="btn" href="submissions.html">Submissions</a>
@@ -64,6 +66,15 @@
                         <span>Search</span>
                         <input id="searchInput" type="search" placeholder="Section, class, id" />
                     </label>
+                    <label class="field compact-field">
+                        <span>Status</span>
+                        <select id="sectionStatusFilter">
+                            <option value="enabled" selected>Enabled</option>
+                            <option value="disabled">Disabled</option>
+                            <option value="all">All</option>
+                        </select>
+                    </label>
+                    <label class="field compact-field"><span>Branch</span><select id="sectionBranchFilter"><option value="all">All branches</option><option value="unassigned">Unassigned sections</option></select></label>
                     <span class="count-chip" id="sectionCount">0</span>
                 </div>
                 <div id="sectionTableWrap" class="table-wrap"></div>
@@ -112,6 +123,9 @@
             </div>
             <div class="form-grid">
                 <label class="field">
+                    <span>School Branch</span><select id="sectionBranch" required></select>
+                </label>
+                <label class="field">
                     <span>Section Name</span>
                     <input id="sectionName" required autocomplete="off" placeholder="DSS grade 8" />
                 </label>
@@ -157,16 +171,20 @@
                 </div>
                 <button class="btn" id="cancelStudentBtn" type="button">Cancel</button>
             </div>
+            <label class="toggle-field">
+                <input id="studentLinkLogin" type="checkbox" checked />
+                <span>Link login account (email and password)</span>
+            </label>
             <div class="form-grid">
                 <label class="field">
-                    <span>Student ID</span>
-                    <input id="studentId" autocomplete="off" placeholder="Auto-generated if blank" />
+                    <span>Student ID (branch code + admission number)</span>
+                    <input id="studentId" autocomplete="off" placeholder="Choose a branch and enter admission number" readonly />
                 </label>
                 <label class="field">
                     <span>Student Name</span>
                     <input id="studentName" required autocomplete="off" placeholder="Student full name" />
                 </label>
-                <label class="field"><span>Admission Number</span><input id="studentAdmissionNo" autocomplete="off" /></label>
+                <label class="field"><span>Admission Number</span><input id="studentAdmissionNo" pattern="[A-Za-z0-9][A-Za-z0-9_-]{0,63}" maxlength="64" required autocomplete="off" /></label>
                 <label class="field"><span>School Email / Login Username</span><input id="studentEmail" type="email" autocomplete="off" /></label>
                 <label class="field"><span>Set / Reset Password</span><input id="studentPassword" type="password" minlength="6" maxlength="128" autocomplete="new-password" placeholder="Leave blank to keep current password" /></label>
                 <label class="field">
@@ -174,7 +192,7 @@
                     <input id="studentPhone" autocomplete="off" placeholder="+91..." />
                 </label>
             </div>
-            <p class="muted-text">Enter email and password to create a login account. Passwords are never saved in student records. Linked accounts are synchronized when saved.</p>
+            <p id="studentLoginHint" class="muted-text">Enter email and password to create a login account. Passwords are never saved in student records.</p>
             <label class="toggle-field">
                 <input id="studentEnabled" type="checkbox" checked />
                 <span>Enabled</span>
@@ -187,12 +205,17 @@
 
     <dialog id="bulkAccountsDialog" class="modal">
         <div class="modal-card">
-            <div class="modal-head"><div><h2>Bulk Create Student Accounts</h2><p id="bulkAccountsSection"></p></div><button id="closeBulkAccountsBtn" class="btn" type="button">Close</button></div>
-            <p>Download the template for students without login accounts. Fill in each school email and an initial password of 6–128 characters, then import it here. Existing linked accounts are skipped; passwords are never displayed or stored in Firestore.</p>
+            <div class="modal-head"><div><h2>Bulk Student Accounts</h2><p id="bulkAccountsSection"></p></div><button id="closeBulkAccountsBtn" class="btn" type="button">Close</button></div>
+            <label class="field"><span>School Domain</span><input id="accountSchoolDomain" type="text" autocomplete="off" placeholder="dsssangareddy.com" /></label>
+            <p>Use existing student records: email is admission-number@school-domain (for example, 614@dsssangareddy.com). The initial password is the first 6 digits of the phone number, ignoring formatting.</p>
+            <div class="action-bar"><button id="previewExistingAccountsBtn" class="btn" type="button">Preview Existing Students</button></div>
+            <p>Or download the template for students without login accounts. Fill in each school email and an initial password of 6–128 characters, then import it here. Existing linked accounts are skipped; matching admission number and phone can link the same login to another section without changing its password; passwords are never displayed or stored in Firestore.</p>
             <div class="action-bar">
                 <button id="accountTemplateBtn" class="btn" type="button">Download Account Template</button>
                 <label class="btn file-btn">Preview Account CSV<input id="accountCsvInput" type="file" accept=".csv,text/csv" /></label>
             </div>
+            <p>Reset passwords for linked students in this section to the first 6 phone digits. This changes the shared login password across all their sections and signs out existing sessions.</p>
+            <div class="action-bar"><button id="previewPasswordResetsBtn" class="btn" type="button">Preview Password Resets</button></div>
             <p id="bulkAccountsStatus" role="status" aria-live="polite"></p>
             <div id="bulkAccountsPreview" class="table-wrap"></div>
             <div class="form-actions"><button id="runBulkAccountsBtn" class="btn primary" type="button" disabled>Create Accounts</button><button id="stopBulkAccountsBtn" class="btn" type="button" hidden>Stop After Current Student</button></div>
@@ -213,6 +236,6 @@
     </dialog>
 
     <div id="toast" class="toast"></div>
-    <script type="module" src="app.js?v=20261014.1"></script>
+    <script type="module" src="app.js?v=20261106.1"></script>
 </body>
 </html>

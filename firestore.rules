@@ -16,18 +16,33 @@ service cloud.firestore {
         && profile().authUid == request.auth.uid;
     }
 
+    // Use section-specific identities while retaining legacy single-section profiles.
+    function sectionMembership(sectionId) {
+      return profile().get('memberships', {}).get(sectionId, {
+        'studentDocId': profile().get('studentDocId', ''),
+        'admissionNo': profile().get('admissionNo', ''),
+        'studentKey': profile().get('studentKey', ''),
+        'active': sectionId == profile().get('sectionId', '') && profile().active == true
+      });
+    }
+
+    function activeSection(sectionId) {
+      return activeStudent() && sectionMembership(sectionId).active == true;
+    }
+
     function submissionOwner(data) {
       return data.authUid == request.auth.uid
         && data.email == request.auth.token.email
-        && data.studentKey == profile().studentKey
-        && data.sectionId == profile().sectionId
-        && data.admissionNo == profile().admissionNo
+        && activeSection(data.sectionId)
+        && data.studentKey == sectionMembership(data.sectionId).studentKey
+        && data.admissionNo == sectionMembership(data.sectionId).admissionNo
         && data.answers is list && data.questionCount is int;
     }
 
     function submissionClassroom(data) {
       let classroom = get(/databases/$(database)/documents/classrooms/$(data.classroomId)).data;
-      return classroom.sectionId == profile().sectionId
+      return classroom.sectionId == data.sectionId
+        && activeSection(classroom.sectionId)
         && classroom.classEnabled == true && classroom.get('archived', false) != true;
     }
 
@@ -141,6 +156,24 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    // Passages become public when first used by a published question.
+    // Keep them readable for other published questions when one child is archived.
+    match /qb_comprehensions_v1/{comprehensionId} {
+      allow read: if resource.data.published == true
+        || (signedIn() && resource.data.authorUid == request.auth.uid);
+      allow create: if signedIn()
+        && request.resource.data.authorUid == request.auth.uid
+        && request.resource.data.passageHtml is string
+        && request.resource.data.published is bool;
+      allow update: if signedIn()
+        && resource.data.authorUid == request.auth.uid
+        && request.resource.data.authorUid == resource.data.authorUid
+        && request.resource.data.passageHtml is string
+        && request.resource.data.published is bool
+        && (resource.data.published == false || request.resource.data.published == true);
+      allow delete: if false;
+    }
+
     match /qb_questions_v1/{questionId} {
       // Published questions are public in Question Bank Studio.
       allow read: if resource.data.status == 'published'
@@ -164,24 +197,63 @@ service cloud.firestore {
         && resource.data.userId == request.auth.uid;
     }
 
+    // School structure and admission claims are written only by the trusted admin API.
+    match /schoolOrganisations/{orgCode} {
+      allow read: if signedIn();
+      allow write: if false;
+    }
+    match /schoolBranches/{branchCode} {
+      allow read: if signedIn();
+      allow write: if false;
+      match /admissions/{admissionNo} {
+        allow read, write: if false;
+      }
+    }
+
     match /classSections/{sectionId} {
       allow read: if canViewSection(resource.data);
-      allow create: if isSchoolAdmin();
-      allow update, delete: if isSchoolAdmin() || canAdminSection(resource.data);
+      allow create, delete: if false;
+      allow update: if (isSchoolAdmin() || canAdminSection(resource.data))
+        && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['branchId', 'branchCode', 'orgId']);
+
+      match /aiConfigs/{configId} {
+        function sectionMember() {
+          return signedIn() && canViewSection(get(/databases/$(database)/documents/classSections/$(sectionId)).data);
+        }
+        function validConfig() {
+          let data = request.resource.data;
+          return data.keys().hasAll(['name', 'provider', 'apiKey', 'baseURL', 'models', 'authorUid', 'createdAt', 'updatedAt'])
+            && data.keys().hasOnly(['name', 'provider', 'apiKey', 'baseURL', 'models', 'authorUid', 'createdAt', 'updatedAt'])
+            && data.name is string && data.name.size() > 0 && data.name.size() <= 100
+            && data.apiKey is string && data.apiKey.size() > 0 && data.apiKey.size() <= 4096
+            && data.models is list && data.models.size() > 0 && data.models.size() <= 6
+            && data.models.toSet().size() == data.models.size()
+            && data.updatedAt == request.time && data.createdAt is timestamp
+            && ((data.provider == 'gemini'
+                && data.baseURL == 'https://generativelanguage.googleapis.com/v1beta/openai/'
+                && data.models.hasOnly(['gemini-3.8-flash', 'gemini-3.8-pro', 'gemini-2.5-flash', 'gemini-2.5-pro']))
+              || (data.provider == 'pollinations'
+                && data.baseURL == 'https://gen.pollinations.ai/v1'
+                && data.models.hasOnly(['openai/gpt-5.4-nano', 'openai/gpt-6-luna', 'openai/gpt-6-sol', 'google/gemini-4-argon', 'anthropic/claude-sonnet-5.5', 'deepseek/deepseek-v4.1-flash'])));
+        }
+        allow read, delete: if sectionMember() && resource.data.authorUid == request.auth.uid;
+        allow create: if sectionMember() && request.resource.data.authorUid == request.auth.uid
+          && request.resource.data.createdAt == request.time && validConfig();
+        allow update: if sectionMember() && resource.data.authorUid == request.auth.uid
+          && request.resource.data.authorUid == resource.data.authorUid
+          && request.resource.data.createdAt == resource.data.createdAt && validConfig();
+      }
 
       match /students/{studentId} {
         allow read: if exists(/databases/$(database)/documents/classSections/$(sectionId))
           && canViewSection(get(/databases/$(database)/documents/classSections/$(sectionId)).data);
-        allow write: if isSchoolAdmin()
-          || (
-            exists(/databases/$(database)/documents/classSections/$(sectionId))
-            && canAdminSection(get(/databases/$(database)/documents/classSections/$(sectionId)).data)
-          );
+        // The API reserves admission numbers transactionally across all sections.
+        allow write: if false;
       }
     }
 
     match /classrooms/{classroomId} {
-      allow read: if activeStudent() && resource.data.sectionId == profile().sectionId;
+      allow read: if activeStudent() && activeSection(resource.data.sectionId);
       allow read: if signedIn()
         && (resource.data.creatorId == request.auth.uid || canAdminClassroomSection(resource.data));
       allow create: if signedIn()
@@ -211,7 +283,7 @@ service cloud.firestore {
         return data.sourceType is string && data.sourceValue is string
           && ((data.sourceType == 'practice' && data.sourceValue == 'homepage')
             || (data.sourceType == 'quiz-session'
-              && get(/databases/$(database)/documents/classrooms/$(data.sourceValue)).data.sectionId == profile().sectionId
+              && activeSection(get(/databases/$(database)/documents/classrooms/$(data.sourceValue)).data.sectionId)
               && get(/databases/$(database)/documents/classrooms/$(data.sourceValue)).data.classEnabled == true
               && get(/databases/$(database)/documents/classrooms/$(data.sourceValue)).data.get('archived', false) != true));
       }
@@ -234,6 +306,14 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    // Merge this read grant with existing student reaction write permissions.
+    match /qb_reactions_v1/{reactionId} {
+      allow read: if signedIn()
+        && resource.data.sourceType == 'quiz-session'
+        && (ownsClassroom(resource.data.sourceValue)
+          || canAdminClassroomSection(get(/databases/$(database)/documents/classrooms/$(resource.data.sourceValue)).data));
+    }
+
     match /qb_quiz_submissions_v1/{submissionId} {
       // Strongest option, if submissions include teacherUid:
       // allow read: if signedIn() && resource.data.teacherUid == request.auth.uid;
@@ -243,7 +323,11 @@ service cloud.firestore {
 
       allow update: if canReviewSubmission(resource.data) && isAiReviewUpdate();
       // Also permits the student's historical submissions without authUid.
-      allow read: if activeStudent() && resource.data.studentKey == profile().studentKey;
+      allow read: if activeStudent()
+        && ((resource.data.get('sectionId', '') != ''
+            && activeSection(resource.data.sectionId)
+            && resource.data.studentKey == sectionMembership(resource.data.sectionId).studentKey)
+          || (activeSection(profile().sectionId) && resource.data.studentKey == profile().studentKey));
       allow create: if activeStudent()
         && submissionOwner(request.resource.data) && submissionClassroom(request.resource.data)
         && (!request.resource.data.get('practiceProgress', false) || validPracticeDraft(request.resource.data));
@@ -259,6 +343,95 @@ service cloud.firestore {
             && request.resource.data.submittedAt is timestamp
             && request.resource.data.submittedAtMillis is number));
       allow delete: if false;
+    }
+
+    // Email admin app: intentionally unauthenticated, scoped to this tree.
+    // These grants are public. They do not authenticate a user or organization.
+    match /organizations/{orgId} {
+      allow read: if true;
+      allow create: if request.resource.data.keys().hasAll([
+          'id', 'name', 'adminEmail', 'domains', 'createdAt', 'clientApiKey', 'moderators'])
+        && request.resource.data.keys().hasOnly([
+          'id', 'name', 'adminEmail', 'domains', 'createdAt', 'clientApiKey', 'moderators'])
+        && request.resource.data.id == orgId
+        && request.resource.data.name is string
+        && request.resource.data.adminEmail is string
+        && request.resource.data.domains is list
+        && request.resource.data.moderators is list
+        && request.resource.data.createdAt is timestamp
+        && request.resource.data.clientApiKey is string;
+      allow update: if request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['domains', 'moderators'])
+        && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['domains'])
+          || request.resource.data.domains is list)
+        && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['moderators'])
+          || request.resource.data.moderators is list);
+      allow delete: if false;
+
+      match /accounts/{accountId} {
+        // Client web registration creates client-role accounts directly.
+        function validClientRegistration() {
+          let data = request.resource.data;
+          return exists(/databases/$(database)/documents/organizations/$(orgId))
+            && data.keys().hasAll(['id', 'orgId', 'email', 'password', 'role', 'createdAt'])
+            && data.keys().hasOnly(['id', 'orgId', 'email', 'displayName', 'password', 'role', 'createdAt'])
+            && data.id == accountId && data.orgId == orgId
+            && data.email is string && data.email.size() > 0
+            && data.email == data.email.lower()
+            && data.password is string && data.password.size() >= 6
+            && data.role == 'client' && data.createdAt is timestamp
+            && (data.get('displayName', null) == null || data.displayName is string);
+        }
+        function validAccountEdit() {
+          let data = request.resource.data;
+          let changed = data.diff(resource.data).affectedKeys();
+          return changed.hasOnly(['email', 'password', 'displayName'])
+            && (!changed.hasAny(['email']) || data.email is string)
+            && (!changed.hasAny(['password']) || data.password is string)
+            && (!changed.hasAny(['displayName'])
+              || data.get('displayName', null) == null || data.displayName is string);
+        }
+        allow read, delete: if true;
+        allow create: if validClientRegistration();
+        // Validate changed fields so password-only edits work for legacy docs.
+        allow update: if validAccountEdit();
+
+        match /emails/{messageId} {
+          function validEmail() {
+            let data = request.resource.data;
+            return data.keys().hasAll([
+                'id', 'orgId', 'accountId', 'toEmail', 'toName', 'fromEmail',
+                'fromName', 'subject', 'body', 'snippet', 'isHtml', 'datetime'])
+              && data.keys().hasOnly([
+                'id', 'orgId', 'accountId', 'toEmail', 'toName', 'fromEmail',
+                'fromName', 'subject', 'body', 'snippet', 'isHtml', 'datetime'])
+              && data.id == messageId && data.orgId == orgId && data.accountId == accountId
+              && data.toEmail is string && data.toName is string
+              && data.fromEmail is string && data.fromName is string
+              && data.subject is string && data.body is string && data.snippet is string
+              && data.isHtml is bool && data.datetime is timestamp;
+          }
+          allow read: if true;
+          // Repeated Gmail IDs use set(), so updates must be allowed for replay.
+          allow create, update: if validEmail();
+          allow delete: if false;
+        }
+      }
+
+      match /otps/{otpId} {
+        allow read: if true;
+        allow create: if request.resource.data.keys().hasAll([
+            'id', 'orgId', 'code', 'createdAt', 'expiresAt'])
+          && request.resource.data.keys().hasOnly([
+            'id', 'orgId', 'code', 'createdAt', 'expiresAt'])
+          && request.resource.data.id == otpId && request.resource.data.orgId == orgId
+          && request.resource.data.code is string
+          && request.resource.data.code.matches('^[0-9]{6}$')
+          && request.resource.data.createdAt is timestamp
+          && request.resource.data.expiresAt is timestamp
+          && request.resource.data.expiresAt > request.resource.data.createdAt;
+        allow update, delete: if false;
+      }
     }
   }
 }
